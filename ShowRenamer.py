@@ -7,17 +7,23 @@ from pathlib import Path
 from fuzzywuzzy import fuzz
 import argparse
 import sys
+from datetime import datetime, timedelta
 
 class ShowRenamer:
     def __init__(self, api_key: str, cache_file: str = "show_cache.json", 
-                 interactive: bool = True, preview: bool = True):
+                 prefix_file: str = "name_patterns.json",
+                 interactive: bool = True, preview: bool = True,
+                 cache_ttl_days: int = 7):
         self.api_key = api_key
         self.cache_file = cache_file
+        self.prefix_file = prefix_file
         self.interactive = interactive
         self.preview = preview
+        self.cache_ttl_days = cache_ttl_days
         self.base_url = "https://api4.thetvdb.com/v4"
         self.bearer_token = None
         self.cache = self._load_cache()
+        self.name_patterns = self._load_name_patterns()
         # Liste gängiger Video-Dateierweiterungen
         self.video_extensions = {
             '.mkv', '.avi', '.mp4', '.m4v', '.mov',
@@ -95,9 +101,18 @@ class ShowRenamer:
         self._save_cache()
         return best_match
 
-    def get_episode_info(self, series_id: int) -> Dict:
-        response = self._make_request(f"series/{series_id}/episodes/default/deu")
-        return response["data"]
+    def get_episode_info(self, series_id: int, force_refresh: bool = False) -> Dict:
+        """Holt Episodeninformationen, aktualisiert Cache bei Bedarf"""
+        cache_key = f"episodes_{series_id}"
+        
+        # Wenn force_refresh True ist oder die Episode nicht gefunden wurde,
+        # hole neue Daten von der API
+        if force_refresh or cache_key not in self.cache:
+            response = self._make_request(f"series/{series_id}/episodes/default/deu")
+            self.cache[cache_key] = response["data"]
+            self._save_cache()
+        
+        return self.cache[cache_key]
 
     def parse_filename(self, filename: str) -> Optional[Tuple[str, int, int]]:
         """
@@ -134,34 +149,58 @@ class ShowRenamer:
         # Wenn keine Übereinstimmung gefunden wurde, verwende den ersten Namen
         return possible_names[0] if possible_names else None, season, episode
 
+    def _load_name_patterns(self) -> Dict:
+        """Lädt die Namens-Muster aus der JSON-Datei"""
+        default_patterns = {
+            "prefixes": [
+                r"^\d{1,4}[a-z]{1,3}[-.]",  # z.B. "4sf-"
+                r"^(?:tt|tv|show)[-.]"       # z.B. "tt-" oder "tv-"
+            ],
+            "suffixes": [
+                r"[-.](?:sd|hd|720p|1080p|x264|aac|dtshd|bluray)",
+                r"[-.](?:web|webrip|hdtv|proper|internal)"
+            ],
+            "replacements": {
+                "dots_to_spaces": True,      # Punkte zu Leerzeichen
+                "underscores_to_spaces": True, # Unterstriche zu Leerzeichen
+                "dashes_to_spaces": True     # Bindestriche zu Leerzeichen
+            }
+        }
+
+        if os.path.exists(self.prefix_file):
+            with open(self.prefix_file, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        else:
+            # Erstelle Datei mit Standardwerten
+            with open(self.prefix_file, 'w', encoding='utf-8') as f:
+                json.dump(default_patterns, f, ensure_ascii=False, indent=2)
+            return default_patterns
+
     def _extract_possible_names(self, show_part: str) -> List[str]:
-        """
-        Extrahiert mögliche Seriennamen aus dem Dateinamenteil
-        """
+        """Extrahiert mögliche Seriennamen basierend auf konfigurierten Mustern"""
         names = set()
         
-        # Entferne bekannte Präfixe/Suffixe
-        show_part = re.sub(r'^(?:\d{1,4}[a-z]{1,3}[-.])', '', show_part)  # z.B. "4sf-"
-        show_part = re.sub(r'(?:[-.](?:sd|hd|720p|1080p|x264|aac|dtshd|bluray))+.*$', '', show_part)
+        # Entferne konfigurierte Präfixe
+        for prefix in self.name_patterns["prefixes"]:
+            show_part = re.sub(prefix, '', show_part)
+        
+        # Entferne konfigurierte Suffixe
+        for suffix in self.name_patterns["suffixes"]:
+            show_part = re.sub(suffix + '.*$', '', show_part)
         
         # Originaler bereinigter Name
         names.add(show_part.strip('.-_'))
         
-        # Punkte durch Leerzeichen ersetzen
-        dot_to_space = show_part.replace('.', ' ').strip()
-        names.add(dot_to_space)
+        # Wende konfigurierte Ersetzungen an
+        replacements = self.name_patterns["replacements"]
+        if replacements.get("dots_to_spaces"):
+            names.add(show_part.replace('.', ' ').strip())
         
-        # Unterstriche durch Leerzeichen ersetzen
-        underscore_to_space = show_part.replace('_', ' ').strip()
-        names.add(underscore_to_space)
-        
-        # Bindestriche durch Leerzeichen ersetzen
-        dash_to_space = show_part.replace('-', ' ').strip()
-        names.add(dash_to_space)
-        
-        # Alle Trennzeichen durch Leerzeichen ersetzen
-        all_to_space = re.sub(r'[._-]', ' ', show_part).strip()
-        names.add(all_to_space)
+        if replacements.get("underscores_to_spaces"):
+            names.add(show_part.replace('_', ' ').strip())
+            
+        if replacements.get("dashes_to_spaces"):
+            names.add(show_part.replace('-', ' ').strip())
         
         # Entferne leere Strings und normalisiere Whitespace
         return [' '.join(name.split()) for name in names if name]
@@ -174,10 +213,9 @@ class ShowRenamer:
         """Zeigt eine Vorschau der Umbenennungen"""
         changes = []
         for filename in os.listdir(directory):
-            # Prüfe auf gültige Videoendung
             if not any(filename.lower().endswith(ext) for ext in self.video_extensions):
                 continue
-            
+
             parsed = self.parse_filename(filename)
             if not parsed:
                 continue
@@ -189,22 +227,32 @@ class ShowRenamer:
                 print(f"Keine Serie gefunden für: {filename}")
                 continue
 
+            # Erste Anfrage ohne force_refresh
             episode_info = self.get_episode_info(series_info["tvdb_id"])
             
-            # Finde die richtige Episode
+            # Suche nach der Episode
             episode_name = None
             for ep in episode_info["episodes"]:
                 if ep["seasonNumber"] == season and ep["number"] == episode:
                     episode_name = ep["name"]
                     break
 
+            # Wenn Episode nicht gefunden, aktualisiere Cache und versuche erneut
+            if not episode_name:
+                print(f"Episode nicht im Cache gefunden, aktualisiere Daten für: {filename}")
+                episode_info = self.get_episode_info(series_info["tvdb_id"], force_refresh=True)
+                
+                # Zweiter Versuch nach Cache-Aktualisierung
+                for ep in episode_info["episodes"]:
+                    if ep["seasonNumber"] == season and ep["number"] == episode:
+                        episode_name = ep["name"]
+                        break
+
             if not episode_name:
                 print(f"Keine Episodeninformation gefunden für: {filename}")
                 continue
 
-            # Hole den deutschen Namen aus den Übersetzungen, falls vorhanden
             series_name = series_info.get("translations", {}).get("deu", series_info["name"])
-
             new_name = self.generate_new_filename(series_name, season, episode, episode_name)
             changes.append((
                 os.path.join(directory, filename),
@@ -272,6 +320,12 @@ class ShowRenamer:
         # Backup-Datei löschen
         os.remove(backup_file)
 
+    def update_patterns(self, new_patterns: Dict) -> None:
+        """Aktualisiert die Namens-Muster"""
+        self.name_patterns.update(new_patterns)
+        with open(self.prefix_file, 'w', encoding='utf-8') as f:
+            json.dump(self.name_patterns, f, ensure_ascii=False, indent=2)
+
     @staticmethod
     def load_api_key(key_file: str = ".env") -> Optional[str]:
         """Lädt den API-Key aus einer .env Datei oder Umgebungsvariable"""
@@ -291,12 +345,25 @@ class ShowRenamer:
 
 def main():
     parser = argparse.ArgumentParser(description='Rename TV show files using TVDB API')
+    
+    # Haupt-Aktionsgruppe
+    action_group = parser.add_mutually_exclusive_group()
+    action_group.add_argument('--rename', action='store_true', default=True,
+                          help='Führe Umbenennung durch (Standard)')
+    action_group.add_argument('--undo', action='store_true',
+                          help='Mache letzte Umbenennung rückgängig')
+    
+    # Weitere Optionen
     parser.add_argument('--api-key', help='TVDB API key')
     parser.add_argument('--key-file', default='.env', help='File containing TVDB API key')
-    parser.add_argument('--no-interactive', action='store_true', help='Disable interactive mode')
-    parser.add_argument('--no-preview', action='store_true', help='Disable preview mode')
+    parser.add_argument('--no-interactive', action='store_true', 
+                       help='Disable interactive mode')
+    parser.add_argument('--no-preview', action='store_true', 
+                       help='Disable preview mode')
     parser.add_argument('--directory', default='/media/truecrypt4/tmp/extraced', 
                        help='Directory containing video files')
+    parser.add_argument('--backup-file', default='rename_backup.json',
+                       help='Backup file for undo operation')
     
     args = parser.parse_args()
 
@@ -316,7 +383,10 @@ def main():
     )
 
     try:
-        renamer.rename_files(args.directory)
+        if args.undo:
+            renamer.undo_rename(args.backup_file)
+        else:
+            renamer.rename_files(args.directory, args.backup_file)
     except Exception as e:
         print(f"Ein Fehler ist aufgetreten: {e}")
         sys.exit(1)

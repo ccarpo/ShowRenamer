@@ -1,0 +1,15 @@
+{
+  "prefixes": [
+    "^\\d{1,4}[a-z]{1,3}[-.]",
+    "^(?:tt|tv|show)[-.]"
+  ],
+  "suffixes": [
+    "[-.](?:sd|hd|720p|1080p|x264|aac|dtshd|bluray)",
+    "[-.](?:web|webrip|hdtv|proper|internal)"
+  ],
+  "replacements": {
+    "dots_to_spaces": true,
+    "underscores_to_spaces": true,
+    "dashes_to_spaces": true
+  }
+}
