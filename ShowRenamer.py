@@ -1,0 +1,230 @@
+import os
+import re
+import json
+import requests
+from typing import Dict, List, Optional, Tuple
+from pathlib import Path
+from fuzzywuzzy import fuzz
+
+class ShowRenamer:
+    def __init__(self, api_key: str, cache_file: str = "show_cache.json", 
+                 interactive: bool = True, preview: bool = True):
+        self.api_key = api_key
+        self.cache_file = cache_file
+        self.interactive = interactive
+        self.preview = preview
+        self.base_url = "https://api4.thetvdb.com/v4"
+        self.bearer_token = None
+        self.cache = self._load_cache()
+
+    def _load_cache(self) -> Dict:
+        if os.path.exists(self.cache_file):
+            with open(self.cache_file, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        return {}
+
+    def _save_cache(self):
+        with open(self.cache_file, 'w', encoding='utf-8') as f:
+            json.dump(self.cache, f, ensure_ascii=False, indent=2)
+
+    def _get_bearer_token(self) -> str:
+        if self.bearer_token:
+            return self.bearer_token
+
+        response = requests.post(
+            f"{self.base_url}/login",
+            json={"apikey": self.api_key}
+        )
+        response.raise_for_status()
+        self.bearer_token = response.json()["data"]["token"]
+        return self.bearer_token
+
+    def _make_request(self, endpoint: str, method: str = "GET", **kwargs) -> Dict:
+        headers = {"Authorization": f"Bearer {self._get_bearer_token()}"}
+        response = requests.request(
+            method,
+            f"{self.base_url}/{endpoint}",
+            headers=headers,
+            **kwargs
+        )
+        response.raise_for_status()
+        return response.json()
+
+    def search_series(self, query: str) -> Optional[Dict]:
+        # Zuerst im Cache nachsehen
+        if query in self.cache:
+            return self.cache[query]
+
+        # API-Abfrage durchführen
+        response = self._make_request("search", params={
+            "query": query,
+            "type": "series"
+        })
+
+        if not response["data"]:
+            return None
+
+        # Beste Übereinstimmung mit Fuzzy Matching finden
+        best_match = None
+        highest_ratio = 0
+
+        for show in response["data"]:
+            ratio = fuzz.ratio(query.lower(), show["name"].lower())
+            if ratio > highest_ratio:
+                highest_ratio = ratio
+                best_match = show
+
+        if highest_ratio < 60:  # Schwellenwert für Übereinstimmung
+            return None
+
+        if self.interactive:
+            confirm = input(f'Gefundene Serie: {best_match["name"]} ({best_match["year"]}). '
+                          f'Ist das korrekt? (j/n): ').lower()
+            if confirm != 'j':
+                return None
+
+        # Im Cache speichern
+        self.cache[query] = best_match
+        self._save_cache()
+        return best_match
+
+    def get_episode_info(self, series_id: int) -> Dict:
+        response = self._make_request(f"series/{series_id}/episodes/default/deu")
+        return response["data"]
+
+    def parse_filename(self, filename: str) -> Optional[Tuple[str, int, int]]:
+        # Beispiel: 4sf-silo.sd.s01e01.mkv
+        pattern = r'(.*?)\.?s(\d{1,2})e(\d{1,2})'
+        match = re.search(pattern, filename.lower())
+        if not match:
+            return None
+        return match.group(1), int(match.group(2)), int(match.group(3))
+
+    def generate_new_filename(self, show_name: str, season: int, 
+                            episode: int, episode_name: str) -> str:
+        return f"{show_name} - S{season:02d}E{episode:02d} - {episode_name}.mkv"
+
+    def preview_rename(self, directory: str = "/media/truecrypt4/tmp/extraced") -> List[Tuple[str, str]]:
+        """Zeigt eine Vorschau der Umbenennungen"""
+        changes = []
+        for filename in os.listdir(directory):
+            if not filename.endswith('.mkv'):
+                continue
+
+            parsed = self.parse_filename(filename)
+            if not parsed:
+                continue
+
+            show_prefix, season, episode = parsed
+            series_info = self.search_series(show_prefix)
+            
+            if not series_info:
+                print(f"Keine Serie gefunden für: {filename}")
+                continue
+
+            episode_info = self.get_episode_info(series_info["tvdb_id"])
+            
+            # Finde die richtige Episode
+            episode_name = None
+            for ep in episode_info["episodes"]:
+                if ep["seasonNumber"] == season and ep["number"] == episode:
+                    episode_name = ep["name"]
+                    break
+
+            if not episode_name:
+                print(f"Keine Episodeninformation gefunden für: {filename}")
+                continue
+
+            series_name = next((
+                trans["name"] 
+                for trans in series_info.get("translations", [])
+                if trans["language"] == "deu"
+            ), series_info["name"])
+
+            new_name = self.generate_new_filename(series_name, season, episode, episode_name)
+            changes.append((
+                os.path.join(directory, filename),
+                os.path.join(directory, new_name)
+            ))
+
+        return changes
+
+    def rename_files(self, directory: str = "/media/truecrypt4/tmp/extraced", 
+                    backup_file: str = "rename_backup.json") -> None:
+        """Führt die Umbenennungen durch und erstellt ein Backup"""
+        if self.preview:
+            changes = self.preview_rename(directory)
+            print("\nGeplante Änderungen:")
+            for old, new in changes:
+                print(f"{os.path.basename(old)} -> {os.path.basename(new)}")
+            
+            if self.interactive:
+                confirm = input("\nMöchten Sie diese Änderungen durchführen? (j/n): ").lower()
+                if confirm != 'j':
+                    print("Abgebrochen.")
+                    return
+
+        # Backup erstellen
+        backup = {}
+        for old_path, new_path in changes:
+            try:
+                os.rename(old_path, new_path)
+                backup[new_path] = old_path
+            except OSError as e:
+                print(f"Fehler beim Umbenennen von {old_path}: {e}")
+
+        # Backup speichern
+        with open(backup_file, 'w', encoding='utf-8') as f:
+            json.dump(backup, f, ensure_ascii=False, indent=2)
+
+    def undo_rename(self, backup_file: str = "rename_backup.json") -> None:
+        """Macht die letzten Umbenennungen rückgängig"""
+        if not os.path.exists(backup_file):
+            print("Keine Backup-Datei gefunden.")
+            return
+
+        with open(backup_file, 'r', encoding='utf-8') as f:
+            backup = json.load(f)
+
+        if self.interactive:
+            print("\nFolgende Änderungen werden rückgängig gemacht:")
+            for new, old in backup.items():
+                print(f"{os.path.basename(new)} -> {os.path.basename(old)}")
+            
+            confirm = input("\nMöchten Sie fortfahren? (j/n): ").lower()
+            if confirm != 'j':
+                print("Abgebrochen.")
+                return
+
+        for new_path, old_path in backup.items():
+            try:
+                if os.path.exists(new_path):
+                    os.rename(new_path, old_path)
+                else:
+                    print(f"Warnung: Datei {new_path} existiert nicht mehr.")
+            except OSError as e:
+                print(f"Fehler beim Wiederherstellen von {new_path}: {e}")
+
+        # Backup-Datei löschen
+        os.remove(backup_file)
+
+def main():
+    api_key = "7756f839-731f-4945-adf8-56ee5949b9a5"
+    renamer = ShowRenamer(
+        api_key=api_key,
+        interactive=True,  # Auf False setzen für automatische Ausführung
+        preview=True      # Auf False setzen um Vorschau zu überspringen
+    )
+
+    try:
+        # Normale Umbenennung
+        renamer.rename_files()
+
+        # Oder zum Rückgängig machen:
+        # renamer.undo_rename()
+
+    except Exception as e:
+        print(f"Ein Fehler ist aufgetreten: {e}")
+
+if __name__ == "__main__":
+    main()
