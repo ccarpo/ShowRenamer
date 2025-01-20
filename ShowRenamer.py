@@ -290,6 +290,7 @@ class ShowRenamer:
         return None
 
 def main():
+<<<<<<< HEAD
     parser = argparse.ArgumentParser(description='Rename TV show files using TVDB API')
     parser.add_argument('--api-key', help='TVDB API key')
     parser.add_argument('--key-file', default='.env', help='File containing TVDB API key')
@@ -309,6 +310,9 @@ def main():
         print("Fehler: Kein API-Key gefunden. Bitte über --api-key übergeben oder in .env Datei speichern.")
         sys.exit(1)
 
+=======
+    api_key = ""
+>>>>>>> b7da84470475a5b8c4baa50745e767733484c044
     renamer = ShowRenamer(
         api_key=api_key,
         interactive=not args.no_interactive,
