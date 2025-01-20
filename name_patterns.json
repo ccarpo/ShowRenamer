@@ -11,5 +11,9 @@
     "dots_to_spaces": true,
     "underscores_to_spaces": true,
     "dashes_to_spaces": true
-  }
+  },
+  "patterns": [
+    "^(.*?)\\s*-\\s*s(\\d{1,2})e(\\d{1,2})\\s*-",
+    "[._-]s(\\d{1,2})e(\\d{1,2})"
+  ]
 }

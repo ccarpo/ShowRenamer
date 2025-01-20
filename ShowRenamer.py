@@ -117,37 +117,40 @@ class ShowRenamer:
     def parse_filename(self, filename: str) -> Optional[Tuple[str, int, int]]:
         """
         Extrahiert Serienname, Staffel und Episode aus dem Dateinamen
-        Unterstützt verschiedene Namensformate:
-        - 4sf-silo.sd.s01e01.mkv
-        - show.name.s01e01.mkv
-        - show_name_s01e01.mkv
         """
         # Entferne Dateiendung
         base_name = os.path.splitext(filename)[0].lower()
         
-        # Suche nach Staffel und Episode
-        pattern = r'[._-]s(\d{1,2})e(\d{1,2})'
-        season_ep_match = re.search(pattern, base_name)
-        
-        if not season_ep_match:
-            return None
-            
-        season = int(season_ep_match.group(1))
-        episode = int(season_ep_match.group(2))
-        
-        # Extrahiere den Teil vor s01e01
-        show_part = base_name[:season_ep_match.start()]
-        
-        # Verschiedene Cleaning-Strategien für den Seriennamen
-        possible_names = self._extract_possible_names(show_part)
-        
-        # Suche nach der besten Übereinstimmung
-        for name in possible_names:
-            if self.search_series(name):
-                return name, season, episode
+        # Versuche alle konfigurierten Patterns
+        for pattern in self.name_patterns.get("patterns", []):
+            match = re.search(pattern, base_name)
+            if match:
+                # Das erste Pattern hat den Seriennamen in Gruppe 1
+                if len(match.groups()) == 3:
+                    show_part = match.group(1)
+                    season = int(match.group(2))
+                    episode = int(match.group(3))
+                # Das zweite Pattern hat nur Staffel und Episode
+                else:
+                    show_part = base_name[:match.start()]
+                    season = int(match.group(1))
+                    episode = int(match.group(2))
                 
-        # Wenn keine Übereinstimmung gefunden wurde, verwende den ersten Namen
-        return possible_names[0] if possible_names else None, season, episode
+                # Cleaning des Seriennamens nur wenn nötig
+                if not match.group(1):
+                    possible_names = self._extract_possible_names(show_part)
+                else:
+                    possible_names = [show_part.strip()]
+                
+                # Suche nach der besten Übereinstimmung
+                for name in possible_names:
+                    if self.search_series(name):
+                        return name, season, episode
+                
+                # Wenn keine Übereinstimmung gefunden wurde, verwende den ersten Namen
+                return possible_names[0] if possible_names else None, season, episode
+                
+        return None
 
     def _load_name_patterns(self) -> Dict:
         """Lädt die Namens-Muster aus der JSON-Datei"""
@@ -164,7 +167,11 @@ class ShowRenamer:
                 "dots_to_spaces": True,      # Punkte zu Leerzeichen
                 "underscores_to_spaces": True, # Unterstriche zu Leerzeichen
                 "dashes_to_spaces": True     # Bindestriche zu Leerzeichen
-            }
+            },
+            "patterns": [
+                r"^(.*?)\s*-\s*s(\d{1,2})e(\d{1,2})\s*-",
+                r"[._-]s(\d{1,2})e(\d{1,2})"
+            ]
         }
 
         if os.path.exists(self.prefix_file):
