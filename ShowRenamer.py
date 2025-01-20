@@ -5,6 +5,8 @@ import requests
 from typing import Dict, List, Optional, Tuple
 from pathlib import Path
 from fuzzywuzzy import fuzz
+import argparse
+import sys
 
 class ShowRenamer:
     def __init__(self, api_key: str, cache_file: str = "show_cache.json", 
@@ -16,6 +18,11 @@ class ShowRenamer:
         self.base_url = "https://api4.thetvdb.com/v4"
         self.bearer_token = None
         self.cache = self._load_cache()
+        # Liste gängiger Video-Dateierweiterungen
+        self.video_extensions = {
+            '.mkv', '.avi', '.mp4', '.m4v', '.mov',
+            '.wmv', '.flv', '.mpg', '.mpeg', '.m2ts'
+        }
 
     def _load_cache(self) -> Dict:
         if os.path.exists(self.cache_file):
@@ -93,12 +100,71 @@ class ShowRenamer:
         return response["data"]
 
     def parse_filename(self, filename: str) -> Optional[Tuple[str, int, int]]:
-        # Beispiel: 4sf-silo.sd.s01e01.mkv
-        pattern = r'(.*?)\.?s(\d{1,2})e(\d{1,2})'
-        match = re.search(pattern, filename.lower())
-        if not match:
+        """
+        Extrahiert Serienname, Staffel und Episode aus dem Dateinamen
+        Unterstützt verschiedene Namensformate:
+        - 4sf-silo.sd.s01e01.mkv
+        - show.name.s01e01.mkv
+        - show_name_s01e01.mkv
+        """
+        # Entferne Dateiendung
+        base_name = os.path.splitext(filename)[0].lower()
+        
+        # Suche nach Staffel und Episode
+        pattern = r'[._-]s(\d{1,2})e(\d{1,2})'
+        season_ep_match = re.search(pattern, base_name)
+        
+        if not season_ep_match:
             return None
-        return match.group(1), int(match.group(2)), int(match.group(3))
+            
+        season = int(season_ep_match.group(1))
+        episode = int(season_ep_match.group(2))
+        
+        # Extrahiere den Teil vor s01e01
+        show_part = base_name[:season_ep_match.start()]
+        
+        # Verschiedene Cleaning-Strategien für den Seriennamen
+        possible_names = self._extract_possible_names(show_part)
+        
+        # Suche nach der besten Übereinstimmung
+        for name in possible_names:
+            if self.search_series(name):
+                return name, season, episode
+                
+        # Wenn keine Übereinstimmung gefunden wurde, verwende den ersten Namen
+        return possible_names[0] if possible_names else None, season, episode
+
+    def _extract_possible_names(self, show_part: str) -> List[str]:
+        """
+        Extrahiert mögliche Seriennamen aus dem Dateinamenteil
+        """
+        names = set()
+        
+        # Entferne bekannte Präfixe/Suffixe
+        show_part = re.sub(r'^(?:\d{1,4}[a-z]{1,3}[-.])', '', show_part)  # z.B. "4sf-"
+        show_part = re.sub(r'(?:[-.](?:sd|hd|720p|1080p|x264|aac|dtshd|bluray))+.*$', '', show_part)
+        
+        # Originaler bereinigter Name
+        names.add(show_part.strip('.-_'))
+        
+        # Punkte durch Leerzeichen ersetzen
+        dot_to_space = show_part.replace('.', ' ').strip()
+        names.add(dot_to_space)
+        
+        # Unterstriche durch Leerzeichen ersetzen
+        underscore_to_space = show_part.replace('_', ' ').strip()
+        names.add(underscore_to_space)
+        
+        # Bindestriche durch Leerzeichen ersetzen
+        dash_to_space = show_part.replace('-', ' ').strip()
+        names.add(dash_to_space)
+        
+        # Alle Trennzeichen durch Leerzeichen ersetzen
+        all_to_space = re.sub(r'[._-]', ' ', show_part).strip()
+        names.add(all_to_space)
+        
+        # Entferne leere Strings und normalisiere Whitespace
+        return [' '.join(name.split()) for name in names if name]
 
     def generate_new_filename(self, show_name: str, season: int, 
                             episode: int, episode_name: str) -> str:
@@ -108,9 +174,10 @@ class ShowRenamer:
         """Zeigt eine Vorschau der Umbenennungen"""
         changes = []
         for filename in os.listdir(directory):
-            if not filename.endswith('.mkv'):
+            # Prüfe auf gültige Videoendung
+            if not any(filename.lower().endswith(ext) for ext in self.video_extensions):
                 continue
-
+            
             parsed = self.parse_filename(filename)
             if not parsed:
                 continue
@@ -135,11 +202,8 @@ class ShowRenamer:
                 print(f"Keine Episodeninformation gefunden für: {filename}")
                 continue
 
-            series_name = next((
-                trans["name"] 
-                for trans in series_info.get("translations", [])
-                if trans["language"] == "deu"
-            ), series_info["name"])
+            # Hole den deutschen Namen aus den Übersetzungen, falls vorhanden
+            series_name = series_info.get("translations", {}).get("deu", series_info["name"])
 
             new_name = self.generate_new_filename(series_name, season, episode, episode_name)
             changes.append((
@@ -208,23 +272,54 @@ class ShowRenamer:
         # Backup-Datei löschen
         os.remove(backup_file)
 
+    @staticmethod
+    def load_api_key(key_file: str = ".env") -> Optional[str]:
+        """Lädt den API-Key aus einer .env Datei oder Umgebungsvariable"""
+        # Prüfe zuerst Umgebungsvariable
+        api_key = os.getenv('TVDB_API_KEY')
+        if api_key:
+            return api_key
+
+        # Dann .env Datei
+        if os.path.exists(key_file):
+            with open(key_file, 'r') as f:
+                for line in f:
+                    if line.startswith('TVDB_API_KEY='):
+                        return line.split('=')[1].strip()
+        
+        return None
+
 def main():
-    api_key = "7756f839-731f-4945-adf8-56ee5949b9a5"
+    parser = argparse.ArgumentParser(description='Rename TV show files using TVDB API')
+    parser.add_argument('--api-key', help='TVDB API key')
+    parser.add_argument('--key-file', default='.env', help='File containing TVDB API key')
+    parser.add_argument('--no-interactive', action='store_true', help='Disable interactive mode')
+    parser.add_argument('--no-preview', action='store_true', help='Disable preview mode')
+    parser.add_argument('--directory', default='/media/truecrypt4/tmp/extraced', 
+                       help='Directory containing video files')
+    
+    args = parser.parse_args()
+
+    # API Key Priorität:
+    # 1. Kommandozeilen-Argument
+    # 2. Umgebungsvariable oder .env Datei
+    api_key = args.api_key or ShowRenamer.load_api_key(args.key_file)
+    
+    if not api_key:
+        print("Fehler: Kein API-Key gefunden. Bitte über --api-key übergeben oder in .env Datei speichern.")
+        sys.exit(1)
+
     renamer = ShowRenamer(
         api_key=api_key,
-        interactive=True,  # Auf False setzen für automatische Ausführung
-        preview=True      # Auf False setzen um Vorschau zu überspringen
+        interactive=not args.no_interactive,
+        preview=not args.no_preview
     )
 
     try:
-        # Normale Umbenennung
-        renamer.rename_files()
-
-        # Oder zum Rückgängig machen:
-        # renamer.undo_rename()
-
+        renamer.rename_files(args.directory)
     except Exception as e:
         print(f"Ein Fehler ist aufgetreten: {e}")
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()
