@@ -209,7 +209,7 @@ class ShowRenamer:
         os.remove(backup_file)
 
 def main():
-    api_key = "7756f839-731f-4945-adf8-56ee5949b9a5"
+    api_key = ""
     renamer = ShowRenamer(
         api_key=api_key,
         interactive=True,  # Auf False setzen für automatische Ausführung
