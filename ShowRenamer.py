@@ -240,7 +240,7 @@ class ShowRenamer:
         safe_episode_name = re.sub(invalid_chars, '-', episode_name)
         return f"{safe_show_name} - S{season:02d}E{episode:02d} - {safe_episode_name}.mkv"
 
-    def preview_rename(self, directory: str = "C:\\Temp\\code\\ShowRenamer") -> List[Tuple[str, str]]:
+    def preview_rename(self, directory: str = "/media/truecrypt4/tmp/extracted") -> List[Tuple[str, str]]:
         """Zeigt eine Vorschau der Umbenennungen"""
         changes = []
         for filename in os.listdir(directory):
@@ -292,7 +292,7 @@ class ShowRenamer:
 
         return changes
 
-    def rename_files(self, directory: str = "C:\\Temp\\code\\ShowRenamer", 
+    def rename_files(self, directory: str = "/media/truecrypt4/tmp/extracted", 
                     backup_file: str = "rename_backup.json") -> None:
         """Führt die Umbenennungen durch und erstellt ein Backup"""
         if self.preview:
@@ -391,7 +391,7 @@ def main():
                        help='Disable interactive mode')
     parser.add_argument('--no-preview', action='store_true', 
                        help='Disable preview mode')
-    parser.add_argument('--directory', default='C:\\Temp\\code\\ShowRenamer', 
+    parser.add_argument('--directory', default='/media/truecrypt4/tmp/extracted', 
                        help='Directory containing video files')
     parser.add_argument('--backup-file', default='rename_backup.json',
                        help='Backup file for undo operation')
