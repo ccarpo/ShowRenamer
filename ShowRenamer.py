@@ -297,7 +297,7 @@ class ShowRenamer:
 
         return changes
 
-    def rename_files(self, directory: str = "D:\\Code\\Private\\ShowRenamer", 
+    def rename_files(self, directory: str = ".", 
                     backup_file: str = "rename_backup.json") -> None:
         """Führt die Umbenennungen durch und erstellt ein Backup"""
         if self.preview:
@@ -396,7 +396,7 @@ def main():
                        help='Disable interactive mode')
     parser.add_argument('--no-preview', action='store_true', 
                        help='Disable preview mode')
-    parser.add_argument('--directory', default='D:\\Code\\Private\\ShowRenamer', 
+    parser.add_argument('--directory', default='.', 
                        help='Directory containing video files')
     parser.add_argument('--backup-file', default='rename_backup.json',
                        help='Backup file for undo operation')
