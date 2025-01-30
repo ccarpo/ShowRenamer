@@ -12,11 +12,13 @@ from datetime import datetime, timedelta
 class ShowRenamer:
     def __init__(self, api_key: str, cache_file: str = "show_cache.json", 
                  prefix_file: str = "name_patterns.json",
+                 mapping_file: str = "series_mapping.json",
                  interactive: bool = True, preview: bool = True,
                  cache_ttl_days: int = 7):
         self.api_key = api_key
         self.cache_file = cache_file
         self.prefix_file = prefix_file
+        self.mapping_file = mapping_file
         self.interactive = interactive
         self.preview = preview
         self.cache_ttl_days = cache_ttl_days
@@ -24,11 +26,29 @@ class ShowRenamer:
         self.bearer_token = None
         self.cache = self._load_cache()
         self.name_patterns = self._load_name_patterns()
+        self.series_mapping = self._load_series_mapping()
         # Liste gängiger Video-Dateierweiterungen
         self.video_extensions = {
             '.mkv', '.avi', '.mp4', '.m4v', '.mov',
             '.wmv', '.flv', '.mpg', '.mpeg', '.m2ts'
         }
+
+    def _load_series_mapping(self) -> Dict[str, str]:
+        """Lädt das Serien-Mapping aus der JSON-Datei"""
+        default_mapping = {
+            "dexteros": "Dexter: Original Sin",
+            "ncis": "Navy CIS"
+        }
+
+        if os.path.exists(self.mapping_file):
+            with open(self.mapping_file, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        else:
+            # Erstelle Datei mit Standardwerten
+            with open(self.mapping_file, 'w', encoding='utf-8') as f:
+                json.dump(default_mapping, f, ensure_ascii=False, indent=2)
+            return default_mapping
+
 
     def _load_cache(self) -> Dict:
         if os.path.exists(self.cache_file):
@@ -142,10 +162,7 @@ class ShowRenamer:
                     episode = int(match.group(2))
                 
                 # Cleaning des Seriennamens nur wenn nötig
-                #if not match.group(1):
-                    possible_names = self._extract_possible_names(show_part)
-                # else:
-                #     possible_names = [show_part.strip()]
+                possible_names = self._extract_possible_names(show_part)
                 
                 # Suche nach der besten Übereinstimmung
                 for name in possible_names:
@@ -200,26 +217,33 @@ class ShowRenamer:
         for suffix in self.name_patterns["suffixes"]:
             show_part = re.sub(suffix + '.*$', '', show_part)
         
-        # Originaler bereinigter Name
-        names.add(show_part.strip('.-_'))
-        
-        # Wende konfigurierte Ersetzungen an
-        replacements = self.name_patterns["replacements"]
-        if replacements.get("dots_to_spaces"):
-            names.add(show_part.replace('.', ' ').strip())
-        
-        if replacements.get("underscores_to_spaces"):
-            names.add(show_part.replace('_', ' ').strip())
+        # Prüfe das Mapping für den bereinigten Namen
+        # cleaned_name = show_part.strip('.-_').lower()
+        if show_part in self.series_mapping:
+            names.add(self.series_mapping[show_part])
+        else:
+            # Wende konfigurierte Ersetzungen an
+            replacements = self.name_patterns["replacements"]
+            if replacements.get("dots_to_spaces"):
+                names.add(show_part.replace('.', ' ').strip())
             
-        if replacements.get("dashes_to_spaces"):
-            names.add(show_part.replace('-', ' ').strip())
-        
+            if replacements.get("underscores_to_spaces"):
+                names.add(show_part.replace('_', ' ').strip())
+                
+            if replacements.get("dashes_to_spaces"):
+                names.add(show_part.replace('-', ' ').strip())
+                    # Originaler bereinigter Name
+            names.add(show_part.strip('.-_'))
+            
         # Entferne leere Strings und normalisiere Whitespace
         return [' '.join(name.split()) for name in names if name]
 
     def generate_new_filename(self, show_name: str, season: int, 
                             episode: int, episode_name: str) -> str:
-        return f"{show_name} - S{season:02d}E{episode:02d} - {episode_name}.mkv"
+        invalid_chars = r'[<>:"/\\|?*]'
+        safe_show_name = re.sub(invalid_chars, '-', show_name)
+        safe_episode_name = re.sub(invalid_chars, '-', episode_name)
+        return f"{safe_show_name} - S{season:02d}E{episode:02d} - {safe_episode_name}.mkv"
 
     def preview_rename(self, directory: str = "/media/truecrypt4/tmp/extracted") -> List[Tuple[str, str]]:
         """Zeigt eine Vorschau der Umbenennungen"""
