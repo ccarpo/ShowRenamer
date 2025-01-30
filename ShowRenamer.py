@@ -82,9 +82,14 @@ class ShowRenamer:
         highest_ratio = 0
 
         for show in response["data"]:
-            ratio = fuzz.ratio(query.lower(), show["name"].lower())
-            if ratio > highest_ratio:
-                highest_ratio = ratio
+            # Check original title
+            ratio_original = fuzz.ratio(query.lower(), show["name"].lower())
+            # Check German translation
+            german_title = show.get("translations", {}).get("deu")
+            ratio_german = fuzz.ratio(query.lower(), german_title.lower()) if german_title else 0
+            # Determine highest ratio
+            if ratio_original > highest_ratio or ratio_german > highest_ratio:
+                highest_ratio = max(ratio_original, ratio_german)
                 best_match = show
 
         if highest_ratio < 60:  # Schwellenwert für Übereinstimmung
@@ -137,10 +142,10 @@ class ShowRenamer:
                     episode = int(match.group(2))
                 
                 # Cleaning des Seriennamens nur wenn nötig
-                if not match.group(1):
+                #if not match.group(1):
                     possible_names = self._extract_possible_names(show_part)
-                else:
-                    possible_names = [show_part.strip()]
+                # else:
+                #     possible_names = [show_part.strip()]
                 
                 # Suche nach der besten Übereinstimmung
                 for name in possible_names:
@@ -268,7 +273,7 @@ class ShowRenamer:
 
         return changes
 
-    def rename_files(self, directory: str = "/media/truecrypt4/tmp/extracted", 
+    def rename_files(self, directory: str = "D:\\Code\\Private\\ShowRenamer", 
                     backup_file: str = "rename_backup.json") -> None:
         """Führt die Umbenennungen durch und erstellt ein Backup"""
         if self.preview:
@@ -367,7 +372,7 @@ def main():
                        help='Disable interactive mode')
     parser.add_argument('--no-preview', action='store_true', 
                        help='Disable preview mode')
-    parser.add_argument('--directory', default='/media/truecrypt4/tmp/extracted', 
+    parser.add_argument('--directory', default='D:\\Code\\Private\\ShowRenamer', 
                        help='Directory containing video files')
     parser.add_argument('--backup-file', default='rename_backup.json',
                        help='Backup file for undo operation')
