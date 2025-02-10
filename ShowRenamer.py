@@ -10,15 +10,18 @@ import sys
 from datetime import datetime, timedelta
 
 class ShowRenamer:
-    def __init__(self, api_key: str, cache_file: str = "show_cache.json", 
+    def __init__(self, api_key: str, config_dir: str = "~/.config/showrenamer",
+                 cache_file: str = "show_cache.json", 
                  prefix_file: str = "name_patterns.json",
                  mapping_file: str = "series_mapping.json",
                  interactive: bool = True, preview: bool = True,
                  cache_ttl_days: int = 7):
+        self.config_dir = os.path.expanduser(config_dir)
+        os.makedirs(self.config_dir, exist_ok=True)
+        self.cache_file = os.path.join(self.config_dir, cache_file)
+        self.prefix_file = os.path.join(self.config_dir, prefix_file)
+        self.mapping_file = os.path.join(self.config_dir, mapping_file)
         self.api_key = api_key
-        self.cache_file = cache_file
-        self.prefix_file = prefix_file
-        self.mapping_file = mapping_file
         self.interactive = interactive
         self.preview = preview
         self.cache_ttl_days = cache_ttl_days
@@ -112,7 +115,7 @@ class ShowRenamer:
                 highest_ratio = max(ratio_original, ratio_german)
                 best_match = show
 
-        if highest_ratio < 60:  # Schwellenwert für Übereinstimmung
+        if highest_ratio < 50:  # Schwellenwert für Übereinstimmung
             return None
 
         if self.interactive:
@@ -241,11 +244,11 @@ class ShowRenamer:
     def generate_new_filename(self, show_name: str, season: int, 
                             episode: int, episode_name: str) -> str:
         invalid_chars = r'[<>:"/\\|?*]'
-        safe_show_name = re.sub(invalid_chars, '-', show_name)
-        safe_episode_name = re.sub(invalid_chars, '-', episode_name)
+        safe_show_name = re.sub(invalid_chars, '', show_name)
+        safe_episode_name = re.sub(invalid_chars, '', episode_name)
         return f"{safe_show_name} - S{season:02d}E{episode:02d} - {safe_episode_name}.mkv"
 
-    def preview_rename(self, directory: str = "/media/truecrypt4/tmp/extracted") -> List[Tuple[str, str]]:
+    def preview_rename(self, directory: str = ".") -> List[Tuple[str, str]]:
         """Zeigt eine Vorschau der Umbenennungen"""
         changes = []
         for filename in os.listdir(directory):
@@ -362,6 +365,91 @@ class ShowRenamer:
         with open(self.prefix_file, 'w', encoding='utf-8') as f:
             json.dump(self.name_patterns, f, ensure_ascii=False, indent=2)
 
+    def test_pattern(self, pattern: str, filename: str) -> Optional[Tuple[str, int, int]]:
+        """
+        Testet ein einzelnes Pattern gegen einen Dateinamen und zeigt das Ergebnis an.
+        
+        Args:
+            pattern: Das zu testende Regex-Pattern
+            filename: Der Dateiname zum Testen
+            
+        Returns:
+            Optional[Tuple[str, int, int]]: (Serienname, Staffel, Episode) wenn gefunden
+        """
+        base_name = os.path.splitext(filename)[0]
+        match = re.search(pattern, base_name)
+        if match:
+            if len(match.groups()) == 3:
+                show_name = match.group(1)
+                season = int(match.group(2))
+                episode = int(match.group(3))
+            else:
+                show_name = base_name[:match.start()]
+                season = int(match.group(1))
+                episode = int(match.group(2))
+            
+            print(f"\nPattern-Test Ergebnis für: {filename}")
+            print(f"Erkannter Serienname: {show_name}")
+            print(f"Erkannte Staffel: {season}")
+            print(f"Erkannte Episode: {episode}")
+            return show_name, season, episode
+        else:
+            print(f"\nKeine Übereinstimmung gefunden für Pattern: {pattern}")
+            return None
+
+    def create_pattern_interactive(self, sample_filename: str) -> Optional[str]:
+        """
+        Führt den Benutzer durch die Erstellung eines neuen Patterns.
+        
+        Args:
+            sample_filename: Ein Beispiel-Dateiname, für den das Pattern erstellt werden soll
+            
+        Returns:
+            Optional[str]: Das erstellte Pattern oder None bei Abbruch
+        """
+        while True:
+            print(f"\nPattern-Erstellung für: {sample_filename}")
+            print("Bitte markieren Sie die Position der Elemente:")
+            print("1. Markieren Sie den Seriennamen mit [name]")
+            print("2. Markieren Sie die Staffelnummer mit [s]")
+            print("3. Markieren Sie die Episodennummer mit [e]")
+            print("\nBeispiel: [name]_s[s]e[e]_whatever.mkv")
+            
+            try:
+                marked = input("Markierter Dateiname: ")
+                
+                # Erstelle Pattern aus der Markierung
+                pattern = re.escape(marked)
+                pattern = pattern.replace(r'\[name\]', r'(.*?)')
+                pattern = pattern.replace(r'\[s\]', r'(\d{1,2})')
+                pattern = pattern.replace(r'\[e\]', r'(\d{1,2})')
+                
+                # Teste das Pattern
+                print("\nGeneriertes Pattern:", pattern)
+                result = self.test_pattern(pattern, sample_filename)
+                
+                if result:
+                    retry = input("\nMöchten Sie das Pattern anpassen? (j/n): ").lower()
+                    if retry != 'j':
+                        save = input("\nPattern speichern? (j/n): ").lower()
+                        if save == 'j':
+                            self.name_patterns["patterns"].append(pattern)
+                            with open(self.prefix_file, 'w', encoding='utf-8') as f:
+                                json.dump(self.name_patterns, f, ensure_ascii=False, indent=2)
+                            print("Pattern wurde gespeichert!")
+                            return pattern
+                        break
+                else:
+                    retry = input("\nPattern hat nicht funktioniert. Nochmal versuchen? (j/n): ").lower()
+                    if retry != 'j':
+                        break
+                
+            except KeyboardInterrupt:
+                print("\nPattern-Erstellung abgebrochen.")
+                return None
+        
+        return None
+
     @staticmethod
     def load_api_key(key_file: str = ".env") -> Optional[str]:
         """Lädt den API-Key aus einer .env Datei oder Umgebungsvariable"""
@@ -388,6 +476,8 @@ def main():
                           help='Führe Umbenennung durch (Standard)')
     action_group.add_argument('--undo', action='store_true',
                           help='Mache letzte Umbenennung rückgängig')
+    action_group.add_argument('--create-pattern',
+                          help='Startet den interaktiven Pattern-Creator für die angegebene Datei')
     
     # Weitere Optionen
     parser.add_argument('--api-key', help='TVDB API key')
@@ -399,7 +489,9 @@ def main():
     parser.add_argument('--directory', default='.', 
                        help='Directory containing video files')
     parser.add_argument('--backup-file', default='rename_backup.json',
-                       help='Backup file for undo operation')
+                       help='Backup file for undo operation'),
+    parser.add_argument('--config-dir', default='~/.config/showrenamer',
+                       help='Directory for configuration files')
     
     args = parser.parse_args()
 
@@ -407,19 +499,26 @@ def main():
     # 1. Kommandozeilen-Argument
     # 2. Umgebungsvariable oder .env Datei
     api_key = args.api_key or ShowRenamer.load_api_key(args.key_file)
-    
+
     if not api_key:
         print("Fehler: Kein API-Key gefunden. Bitte über --api-key übergeben oder in .env Datei speichern.")
         sys.exit(1)
 
     renamer = ShowRenamer(
         api_key=api_key,
+        config_dir=args.config_dir,
         interactive=not args.no_interactive,
         preview=not args.no_preview
     )
 
     try:
-        if args.undo:
+        if args.create_pattern:
+            # Prüfe ob die Datei existiert
+            if not os.path.exists(os.path.join(args.directory, args.create_pattern)):
+                print(f"Fehler: Datei '{args.create_pattern}' nicht gefunden!")
+                sys.exit(1)
+            renamer.create_pattern_interactive(args.create_pattern)
+        elif args.undo:
             renamer.undo_rename(args.backup_file)
         else:
             renamer.rename_files(args.directory, args.backup_file)
