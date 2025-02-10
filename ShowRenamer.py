@@ -481,7 +481,6 @@ def main():
     
     # Weitere Optionen
     parser.add_argument('--api-key', help='TVDB API key')
-    parser.add_argument('--key-file', default='.env', help='File containing TVDB API key')
     parser.add_argument('--no-interactive', action='store_true', 
                        help='Disable interactive mode')
     parser.add_argument('--no-preview', action='store_true', 
@@ -498,7 +497,7 @@ def main():
     # API Key Priorität:
     # 1. Kommandozeilen-Argument
     # 2. Umgebungsvariable oder .env Datei
-    api_key = args.api_key or ShowRenamer.load_api_key(args.key_file)
+    api_key = args.api_key or ShowRenamer.load_api_key(args.config_dir+"/.env")
 
     if not api_key:
         print("Fehler: Kein API-Key gefunden. Bitte über --api-key übergeben oder in .env Datei speichern.")
