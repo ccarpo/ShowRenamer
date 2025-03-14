@@ -1,7 +1,7 @@
 """Configuration management module."""
 import json
 import os
-from typing import Dict
+from typing import Dict, List
 
 class Config:
     def __init__(self, config_dir: str = "~/.config/showrenamer"):
@@ -10,6 +10,7 @@ class Config:
             'cache': 'show_cache.json',
             'patterns': 'name_patterns.json',
             'mapping': 'series_mapping.json',
+            'directories': 'show_directories.json'
         }
         self._ensure_config_dir()
         self._load_configs()
@@ -22,6 +23,7 @@ class Config:
         """Load all configuration files."""
         self.patterns = self._load_file('patterns', self._default_patterns())
         self.mapping = self._load_file('mapping', self._default_mapping())
+        self.directories = self._load_file('directories', self._default_directories())
 
     def _load_file(self, config_type: str, default_data: Dict) -> Dict:
         """Load a specific configuration file."""
@@ -49,6 +51,11 @@ class Config:
         self.patterns = patterns
         self._save_file('patterns', patterns)
 
+    def save_directories(self, directories: Dict):
+        """Save show directories configuration."""
+        self.directories = directories
+        self._save_file('directories', directories)
+
     def _default_patterns(self) -> Dict:
         return {
             "prefixes": [
@@ -74,4 +81,11 @@ class Config:
         return {
             "dexteros": "Dexter: Original Sin",
             "ncis": "Navy CIS"
+        }
+
+    def _default_directories(self) -> Dict:
+        return {
+            "show_directories": [
+                "/media/shows"  # Default show directory for Docker setup
+            ]
         }

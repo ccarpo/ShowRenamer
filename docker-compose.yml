@@ -7,9 +7,14 @@ services:
     environment:
       - TVDB_API_KEY=${TVDB_API_KEY}
       - CONFIG_DIR=/config
+      - TV_SHOWS_SOURCE=${TV_SHOWS_SOURCE:-/media/incoming}
+      - TV_SHOWS_DEST=${TV_SHOWS_DEST:-/media/shows}
     volumes:
       # Config persistence
       - ./config:/config
-      # Media volumes
+      # Media volumes - mount your show libraries as read-only
       - ${TV_SHOWS_SOURCE:-./media/incoming}:/media/incoming:ro  # Source folder (read-only)
-      - ${TV_SHOWS_DEST:-./media/shows}:/media/shows:rw         # Destination folder (read-write)
+      - ${TV_SHOWS_DEST:-./media/shows}:/media/shows:rw         # Primary destination folder (read-write)
+      # Additional show libraries (read-only, for searching existing shows)
+      - /media/qinakuta/Serien:/media/qinakuta/Serien:ro  # Qinakuta show library
+      - /media/arrakis/Serien:/media/arrakis/Serien:ro    # Arrakis show library

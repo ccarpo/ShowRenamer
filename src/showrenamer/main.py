@@ -4,12 +4,20 @@ import argparse
 import time
 from typing import List
 from dotenv import load_dotenv
+import logging
 
 from .api import TVDBClient
 from .cache import Cache
 from .config import Config
 from .renamer import FileRenamer
 from .file_monitor import FileMonitor
+
+# Set up logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 class ShowRenamerApp:
     def __init__(self,
@@ -25,10 +33,25 @@ class ShowRenamerApp:
             cache_ttl_days
         )
         self.api_client = TVDBClient(api_key)
+        
+        # Get show directories from config
+        show_directories = self.config.directories.get("show_directories", [])
+        
+        # Add environment-specified destination if provided
+        dest_dir = os.getenv('TV_SHOWS_DEST')
+        if dest_dir and dest_dir not in show_directories:
+            show_directories.append(dest_dir)
+            self.config.directories["show_directories"] = show_directories
+            self.config.save_directories(self.config.directories)
+        
+        if not show_directories:
+            logger.warning("No show directories configured. Files will be renamed in place.")
+        
         self.renamer = FileRenamer(
             self.api_client,
             self.cache,
             self.config,
+            show_directories,
             interactive,
             preview
         )
@@ -41,7 +64,8 @@ class ShowRenamerApp:
     def run(self):
         """Run the application."""
         try:
-            print("Starting file monitor...")
+            logger.info("Starting file monitor...")
+            logger.info(f"Show directories: {self.config.directories['show_directories']}")
             self.monitor.start()
             
             while True:
@@ -49,7 +73,7 @@ class ShowRenamerApp:
                 time.sleep(3600)  # Check pending files every hour
                 
         except KeyboardInterrupt:
-            print("\nStopping file monitor...")
+            logger.info("\nStopping file monitor...")
             self.monitor.stop()
 
 def main():
@@ -63,6 +87,7 @@ def main():
     parser.add_argument("--no-interactive", action="store_true", help="Don't ask for confirmation")
     parser.add_argument("--no-preview", action="store_true", help="Don't show preview of changes")
     parser.add_argument("--cache-ttl", type=int, default=7, help="Cache TTL in days")
+    parser.add_argument("--show-dir", action="append", help="Add a show directory to search for existing shows")
     
     args = parser.parse_args()
     

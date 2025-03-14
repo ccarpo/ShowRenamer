@@ -3,12 +3,18 @@ import re
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Set
 from fuzzywuzzy import fuzz
+import logging
+
+from .show_directory import ShowDirectory
+
+logger = logging.getLogger(__name__)
 
 class FileRenamer:
     def __init__(self, 
                  api_client,
                  cache,
                  config,
+                 show_directories: List[str],
                  interactive: bool = True,
                  preview: bool = True):
         self.api_client = api_client
@@ -16,6 +22,7 @@ class FileRenamer:
         self.config = config
         self.interactive = interactive
         self.preview = preview
+        self.show_directory = ShowDirectory(show_directories)
         self.video_extensions = {
             '.mkv', '.avi', '.mp4', '.m4v', '.mov',
             '.wmv', '.flv', '.mpg', '.mpeg', '.m2ts'
@@ -49,8 +56,26 @@ class FileRenamer:
             if self.interactive:
                 if not self._confirm_rename():
                     return False
+
+        # Get the show name from series info (prefer German title if available)
+        show_name = series_info.get("translations", {}).get("deu") or series_info["name"]
         
-        return self._perform_rename(path, new_name)
+        # First rename in place
+        new_path = path.parent / new_name
+        try:
+            if not self.preview:
+                path.rename(new_path)
+        except Exception as e:
+            logger.error(f"Error renaming file: {e}")
+            return False
+
+        # Then try to move to show directory
+        if not self.preview:
+            moved = self.show_directory.move_file(new_path, show_name, episode_info["seasonNumber"])
+            if not moved:
+                logger.warning(f"File renamed but not moved: {new_path}")
+        
+        return True
 
     def parse_filename(self, filename: str) -> Optional[Tuple[str, int, int]]:
         """Extract show name, season, and episode from filename."""
