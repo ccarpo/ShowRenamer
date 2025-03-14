@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  showrenamer:
+    build: .
+    container_name: showrenamer
+    environment:
+      - TVDB_API_KEY=${TVDB_API_KEY}
+      - CONFIG_DIR=/config
+    volumes:
+      # Config persistence
+      - ./config:/config
+      # Media volumes
+      - ${TV_SHOWS_SOURCE:-./media/incoming}:/media/incoming:ro  # Source folder (read-only)
+      - ${TV_SHOWS_DEST:-./media/shows}:/media/shows:rw         # Destination folder (read-write)

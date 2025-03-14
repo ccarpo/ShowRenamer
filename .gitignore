@@ -4,3 +4,4 @@ show_cache.json
 .vscode
 *.mkv
 __pycache__/
+venv
