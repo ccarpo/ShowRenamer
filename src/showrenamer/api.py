@@ -39,5 +39,16 @@ class TVDBClient:
         return response["data"] if response["data"] else None
 
     def get_episode_info(self, series_id: int) -> Dict:
-        response = self._make_request(f"series/{series_id}/episodes/default/deu")
-        return response["data"]
+        all_episodes = []
+        page = 0
+        while True:
+            response = self._make_request(f"series/{series_id}/episodes/default/deu?page={page}")
+            all_episodes.extend(response["data"])
+            
+            # Check if there are more pages
+            links = response.get("links", {})
+            if not links.get("next"):
+                break
+            page += 1
+            
+        return all_episodes
