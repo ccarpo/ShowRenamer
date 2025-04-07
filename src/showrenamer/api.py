@@ -39,11 +39,17 @@ class TVDBClient:
         return response["data"] if response["data"] else None
 
     def get_episode_info(self, series_id: int) -> Dict:
+        # Extract numeric ID if it's in the format 'series-12345'
+        if isinstance(series_id, str) and series_id.startswith('series-'):
+            numeric_id = series_id.split('-')[1]
+        else:
+            numeric_id = str(series_id)
+            
         all_episodes = []
         page = 0
         while True:
-            response = self._make_request(f"series/{series_id}/episodes/default/deu?page={page}")
-            all_episodes.extend(response["data"])
+            response = self._make_request(f"series/{numeric_id}/episodes/default/deu?page={page}")
+            all_episodes.extend(response["data"]["episodes"])
             
             # Check if there are more pages
             links = response.get("links", {})

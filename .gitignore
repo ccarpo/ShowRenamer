@@ -5,3 +5,4 @@ show_cache.json
 *.mkv
 __pycache__/
 venv
+*.egg-info

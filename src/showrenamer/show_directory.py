@@ -63,6 +63,30 @@ class ShowDirectory:
         result["can_move"] = True
         return result
 
+    def get_target_directory(self, show_name: str, season_number: int) -> Optional[Path]:
+        """Get the target directory where a file would be moved to.
+        
+        Args:
+            show_name: Name of the show
+            season_number: Season number (0 for Specials)
+            
+        Returns:
+            Optional[Path]: Path to the target directory, or None if not found
+        """
+        # Find show directory
+        show_dir = self.find_show_directory(show_name)
+        if not show_dir:
+            logger.debug(f"No directory found for show: {show_name}")
+            return None
+
+        # Get season directory
+        season_dir = self.get_season_directory(show_dir, season_number)
+        if not season_dir.exists():
+            logger.debug(f"Season directory doesn't exist: {season_dir}")
+            return None
+            
+        return season_dir
+        
     def move_file(self, source_file: Path, show_name: str, season_number: int) -> bool:
         """Move a file to the appropriate show and season directory if possible.
         
@@ -74,16 +98,9 @@ class ShowDirectory:
         Returns:
             bool: True if file was moved successfully, False otherwise
         """
-        # Find show directory
-        show_dir = self.find_show_directory(show_name)
-        if not show_dir:
-            logger.warning(f"No directory found for show: {show_name}")
-            return False
-
-        # Get season directory
-        season_dir = self.get_season_directory(show_dir, season_number)
-        if not season_dir.exists():
-            logger.warning(f"Season directory doesn't exist: {season_dir}")
+        # Get the target directory
+        season_dir = self.get_target_directory(show_name, season_number)
+        if not season_dir:
             return False
 
         # Prepare destination path

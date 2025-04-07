@@ -5,7 +5,8 @@ from typing import Dict, List, Optional, Tuple, Set
 from fuzzywuzzy import fuzz
 import logging
 
-from .show_directory import ShowDirectory
+from show_directory import ShowDirectory
+from file_logger import FileLogger
 
 logger = logging.getLogger(__name__)
 
@@ -16,13 +17,17 @@ class FileRenamer:
                  config,
                  show_directories: List[str],
                  interactive: bool = True,
-                 preview: bool = True):
+                 dry_run: bool = True,  # Default to dry-run mode
+                 rename_only: bool = False,
+                 log_dir: str = None):
         self.api_client = api_client
         self.cache = cache
         self.config = config
         self.interactive = interactive
-        self.preview = preview
+        self.dry_run = dry_run
+        self.rename_only = rename_only
         self.show_directory = ShowDirectory(show_directories)
+        self.file_logger = FileLogger(log_dir)
         self.video_extensions = {
             '.mkv', '.avi', '.mp4', '.m4v', '.mov',
             '.wmv', '.flv', '.mpg', '.mpeg', '.m2ts'
@@ -51,29 +56,96 @@ class FileRenamer:
         if not new_name:
             return False
 
-        if self.preview:
-            print(f"Would rename: {path.name} -> {new_name}")
-            if self.interactive:
-                if not self._confirm_rename():
-                    return False
-
         # Get the show name from series info (prefer German title if available)
         show_name = series_info.get("translations", {}).get("deu") or series_info["name"]
         
-        # First rename in place
-        new_path = path.parent / new_name
-        try:
-            if not self.preview:
+        # Determine what operations to perform
+        should_rename = True  # Always rename unless rename-only mode is active
+        should_move = not self.rename_only  # Move unless rename-only mode
+        
+        # Check if we're in dry-run mode
+        if self.dry_run:
+            if should_rename:
+                logger.info(f"[DRY RUN] Would rename: {path.name} -> {new_name}")
+            if should_move:
+                target_dir = self.show_directory.get_target_directory(show_name, episode_info["seasonNumber"])
+                if target_dir:
+                    logger.info(f"[DRY RUN] Would move to: {target_dir}")
+                else:
+                    logger.info(f"[DRY RUN] Would not move (no suitable target directory found)")
+            
+            if self.interactive and not self.dry_run:
+                if not self._confirm_rename():
+                    return False
+            
+            # In dry-run mode, always return success without making changes
+            if self.dry_run:
+                return True
+        
+        # Perform the actual operations
+        new_path = path
+        
+        # First rename in place if needed
+        if should_rename and not self.dry_run:
+            new_path = path.parent / new_name
+            try:
                 path.rename(new_path)
-        except Exception as e:
-            logger.error(f"Error renaming file: {e}")
-            return False
+                logger.info(f"Renamed: {path.name} -> {new_name}")
+                # Log the rename operation
+                self.file_logger.log_operation(
+                    operation_type="rename",
+                    source_file=path,
+                    target_file=new_path,
+                    details={
+                        "show_name": show_name,
+                        "season": episode_info["seasonNumber"],
+                        "episode": episode_info["episodeNumber"],
+                        "episode_title": episode_info.get("episodeName", "")
+                    }
+                )
+            except Exception as e:
+                logger.error(f"Error renaming file: {e}")
+                # Log the failed operation
+                self.file_logger.log_operation(
+                    operation_type="rename",
+                    source_file=path,
+                    target_file=new_path,
+                    success=False,
+                    details={"error": str(e)}
+                )
+                return False
 
-        # Then try to move to show directory
-        if not self.preview:
+        # Then try to move to show directory if needed
+        if should_move and not self.dry_run:
+            target_dir = self.show_directory.get_target_directory(show_name, episode_info["seasonNumber"])
             moved = self.show_directory.move_file(new_path, show_name, episode_info["seasonNumber"])
-            if not moved:
-                logger.warning(f"File renamed but not moved: {new_path}")
+            if moved:
+                logger.info(f"Moved to show directory: {moved}")
+                # Log the move operation
+                self.file_logger.log_operation(
+                    operation_type="move",
+                    source_file=new_path,
+                    target_file=target_dir / new_path.name if target_dir else None,
+                    details={
+                        "show_name": show_name,
+                        "season": episode_info["seasonNumber"],
+                        "episode": episode_info["episodeNumber"]
+                    }
+                )
+            else:
+                logger.warning(f"File not moved: {new_path}")
+                # Log the failed move operation
+                self.file_logger.log_operation(
+                    operation_type="move",
+                    source_file=new_path,
+                    target_file=target_dir / new_path.name if target_dir else None,
+                    success=False,
+                    details={
+                        "show_name": show_name,
+                        "season": episode_info["seasonNumber"],
+                        "reason": "No suitable target directory found"
+                    }
+                )
         
         return True
 
@@ -202,7 +274,7 @@ class FileRenamer:
         """Perform the actual file rename operation."""
         try:
             new_path = old_path.parent / new_name
-            if not self.preview:
+            if not self.dry_run:
                 old_path.rename(new_path)
             return True
         except Exception as e:
