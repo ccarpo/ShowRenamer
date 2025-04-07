@@ -18,16 +18,10 @@ git clone <repository-url>
 cd ShowRenamer
 ```
 
-2. Create your environment file:
+2. Configure your TVDB API key:
 ```bash
 cp .env.example .env
-```
-
-3. Edit `.env` with your configuration:
-```env
-TVDB_API_KEY=your_api_key_here
-TV_SHOWS_SOURCE=/path/to/your/tv/shows
-TV_SHOWS_DEST=/path/to/your/renamed/shows
+# Edit .env to set your TVDB_API_KEY
 ```
 
 4. Create required directories:
@@ -82,25 +76,20 @@ python -m showrenamer.main /path/to/monitor
 ### Configuration Options
 - `--api-key`: TVDB API key (optional if set in .env)
 - `--config-dir`: Configuration directory (defaults to ~/.config/showrenamer)
-- `--cache-ttl`: Cache duration in days
-- `--show-dir`: Add a show directory to search for existing shows (can be used multiple times)
+- `--cache-ttl`: Cache duration in days (default: 7)
+- `--shows-dir`: Add a shows directory to search for existing shows and move files to (can be used multiple times)
 
 ### Behavior Options
-- `--no-interactive`: Skip confirmations
-
+- `--interactive`: Enable interactive mode with confirmations
 
 ### Operation Modes (mutually exclusive)
-- `--dry-run`: Show what would happen without making any changes
+- `--enable-changes`: Enable actual file changes (requires SHOWRENAMER_ENABLE_CHANGES=true)
 - `--rename-only`: Only rename files in place, don't move them
 
 ## Environment Variables
 
 ### Required
 - `TVDB_API_KEY`: Your TVDB API key
-
-### Optional Paths
-- `TV_SHOWS_SOURCE`: Source directory for TV shows (default: ./media/incoming)
-- `TV_SHOWS_DEST`: Destination directory for renamed shows (default: ./media/shows)
 
 ### Operation Modes
 
@@ -112,6 +101,19 @@ The application runs in dry-run mode by default, showing what changes would be m
 Additional modes:
 - `SHOWRENAMER_RENAME_ONLY`: Only rename files, don't move them (requires SHOWRENAMER_ENABLE_CHANGES=true)
 
+### Timing Settings
+- `SHOWRENAMER_RETRY_INTERVAL`: How long to wait before retrying failed files (default: 86400 seconds / 24 hours)
+- `SHOWRENAMER_STABILITY_PERIOD`: How long to wait before processing new files (default: 300 seconds / 5 minutes)
+
+## File Logging
+
+The application maintains detailed logs of all file operations in the config directory under `logs/`:
+- Text and JSON format logs for easy reading and parsing
+- Records all rename and move operations with success/failure status
+- Stores metadata like show name, season, episode number
+- Logs error messages for troubleshooting
+- Allows auditing of file changes and operation history
+
 ## Configuration Files
 
 The application uses several configuration files stored in the config directory:
@@ -119,3 +121,4 @@ The application uses several configuration files stored in the config directory:
 - `name_patterns.json`: Patterns for parsing filenames
 - `series_mapping.json`: Manual series name mappings
 - `show_directories.json`: Configured show directories
+- `logs/`: Directory containing operation logs

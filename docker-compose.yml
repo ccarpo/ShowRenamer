@@ -1,25 +1,25 @@
-version: '3.8'
-
 services:
   showrenamer:
     build: .
     container_name: showrenamer
     environment:
       - TVDB_API_KEY=${TVDB_API_KEY}
-      - CONFIG_DIR=/config
-      - TV_SHOWS_SOURCE=${TV_SHOWS_SOURCE:-/media/incoming}
-      - TV_SHOWS_DEST=${TV_SHOWS_DEST:-/media/shows}
       # Operation mode
       - SHOWRENAMER_ENABLE_CHANGES=${SHOWRENAMER_ENABLE_CHANGES:-false}  # Set to true to enable actual file changes
-      - SHOWRENAMER_RENAME_ONLY=${SHOWRENAMER_RENAME_ONLY:-false}        # Only rename files, don't move them
+      #- SHOWRENAMER_RENAME_ONLY=${SHOWRENAMER_RENAME_ONLY:-false}        # Only rename files, don't move them
+      
       # Behavior settings
-      - SHOWRENAMER_INTERACTIVE=${SHOWRENAMER_INTERACTIVE:-false}        # Enable interactive confirmations
+      #- SHOWRENAMER_INTERACTIVE=${SHOWRENAMER_INTERACTIVE:-false}        # Enable interactive confirmations
+      
+      # Timing settings
+      #- SHOWRENAMER_RETRY_INTERVAL=86400      # Retry failed files after 24 hours
+      #- SHOWRENAMER_STABILITY_PERIOD=300      # Wait 5 minutes before processing new files
     volumes:
       # Config persistence
       - ./config:/config
       # Media volumes - mount your show libraries as read-only
-      - ${TV_SHOWS_SOURCE:-./media/incoming}:/media/incoming:ro  # Source folder (read-only)
-      - ${TV_SHOWS_DEST:-./media/shows}:/media/shows:rw         # Primary destination folder (read-write)
+      - ./extracted:/media/incoming:rw  # Source folder (read-only)
+      #- ${TV_SHOWS_DEST:-./media/shows}:/media/shows:rw         # Primary destination folder (read-write)
       # Additional show libraries (read-only, for searching existing shows)
-      - /media/qinakuta/Serien:/media/qinakuta/Serien:ro  # Qinakuta show library
-      - /media/arrakis/Serien:/media/arrakis/Serien:ro    # Arrakis show library
+      - /media/mount1/Serien:/media/shows/mount1:rw  # Qinakuta show library
+      - /media/mount2/Serien:/media/shows/mount2:rw    # Arrakis show library

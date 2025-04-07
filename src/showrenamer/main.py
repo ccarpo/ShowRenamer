@@ -6,11 +6,11 @@ from typing import List
 from dotenv import load_dotenv
 import logging
 
-from api import TVDBClient
-from cache import Cache
-from config import Config
-from renamer import FileRenamer
-from file_monitor import FileMonitor
+from showrenamer.api import TVDBClient
+from showrenamer.cache import Cache
+from showrenamer.config import Config
+from showrenamer.renamer import FileRenamer
+from showrenamer.file_monitor import FileMonitor
 
 # Set up logging
 logging.basicConfig(
@@ -27,7 +27,10 @@ class ShowRenamerApp:
                  interactive: bool = False,
                  cache_ttl_days: int = 7,
                  dry_run: bool = False,
-                 rename_only: bool = False):
+                 rename_only: bool = False,
+                 retry_interval: int = 86400,  # 24 hours in seconds
+                 stability_period: int = 180,  # 3 minutes in seconds
+                 shows_dirs: List[str] = None):
         self.config = Config(config_dir)
         self.cache = Cache(
             os.path.join(self.config.config_dir, self.config.config_files['cache']),
@@ -38,10 +41,11 @@ class ShowRenamerApp:
         # Get show directories from config
         show_directories = self.config.directories.get("show_directories", [])
         
-        # Add environment-specified destination if provided
-        dest_dir = os.getenv('TV_SHOWS_DEST')
-        if dest_dir and dest_dir not in show_directories:
-            show_directories.append(dest_dir)
+        # Add any shows directories specified via command line
+        if shows_dirs:
+            for shows_dir in shows_dirs:
+                if shows_dir not in show_directories:
+                    show_directories.append(shows_dir)
             self.config.directories["show_directories"] = show_directories
             self.config.save_directories(self.config.directories)
         
@@ -62,10 +66,16 @@ class ShowRenamerApp:
             rename_only=rename_only,
             log_dir=log_dir
         )
+        # Get timing parameters from environment or use defaults
+        retry_interval = int(os.getenv('SHOWRENAMER_RETRY_INTERVAL', str(retry_interval)))
+        stability_period = int(os.getenv('SHOWRENAMER_STABILITY_PERIOD', str(stability_period)))
+
         self.monitor = FileMonitor(
             watch_paths,
             self.renamer.process_file,
-            self.renamer.video_extensions
+            self.renamer.video_extensions,
+            retry_interval=retry_interval,
+            stability_period=stability_period
         )
 
     def run(self):
@@ -101,7 +111,7 @@ def main():
     parser.add_argument("--config-dir", default="~/.config/showrenamer", help="Configuration directory")
     parser.add_argument("--interactive", action="store_true", help="Enable interactive mode with confirmations")
     parser.add_argument("--cache-ttl", type=int, default=7, help="Cache TTL in days")
-    parser.add_argument("--show-dir", action="append", help="Add a show directory to search for existing shows")
+    parser.add_argument("--shows-dir", action="append", help="Add a shows directory to search for existing shows and move files to")
     
     # Operation mode options
     mode_group = parser.add_mutually_exclusive_group()
@@ -131,7 +141,7 @@ def main():
     config = Config(args.config_dir)
     
     # If --show-dir is specified, add those directories
-    if args.show_dir:
+    if args.shows_dir:
         show_dirs = config.directories.get("show_directories", [])
         for dir_path in args.show_dir:
             if dir_path not in show_dirs:
@@ -141,11 +151,8 @@ def main():
     
     # Check if changes are enabled via environment variable
     changes_enabled = os.getenv('SHOWRENAMER_ENABLE_CHANGES', '').lower() in ('true', '1', 'yes')
-    if args.enable_changes and not changes_enabled:
-        parser.error("SHOWRENAMER_ENABLE_CHANGES must be set to 'true' to enable actual file changes")
-
     # Determine operation mode
-    dry_run = not (args.enable_changes and changes_enabled)  # Dry run by default unless changes explicitly enabled
+    dry_run = not (args.enable_changes or changes_enabled)  # Dry run by default unless changes explicitly enabled
     rename_only = args.rename_only or os.getenv('SHOWRENAMER_RENAME_ONLY', '').lower() in ('true', '1', 'yes')
     interactive = args.interactive or os.getenv('SHOWRENAMER_INTERACTIVE', '').lower() in ('true', '1', 'yes')
     
@@ -158,10 +165,12 @@ def main():
         watch_paths=args.paths,
         config_dir=args.config_dir,
         interactive=interactive,
-        preview=preview,
         cache_ttl_days=args.cache_ttl,
         dry_run=dry_run,
-        rename_only=rename_only
+        rename_only=rename_only,
+        retry_interval=int(os.getenv('SHOWRENAMER_RETRY_INTERVAL', '86400')),  # 24 hours
+        stability_period=int(os.getenv('SHOWRENAMER_STABILITY_PERIOD', '300')),  # 5 minutes
+        shows_dirs=args.shows_dir
     )
     
     app.run()

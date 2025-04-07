@@ -11,14 +11,12 @@ RUN apt-get update && \
     python3-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy only the requirements first to leverage Docker cache
-COPY requirements.txt setup.py ./
+# Copy the package files
+COPY . .
 
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Copy the source code
-COPY src/ ./src/
+# Install Python dependencies and the package itself
+RUN pip install --no-cache-dir -r requirements.txt && \
+    pip install --no-cache-dir .
 
 # Create config directory
 RUN mkdir -p /config
@@ -32,4 +30,4 @@ ENV CONFIG_DIR=/config
 
 # Run the application with default configuration
 ENTRYPOINT ["python", "-m", "showrenamer.main"]
-CMD ["/media/incoming", "--no-interactive", "--config-dir", "/config"]
+CMD ["/media/incoming", "--config-dir", "/config"]

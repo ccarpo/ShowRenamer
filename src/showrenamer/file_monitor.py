@@ -16,7 +16,7 @@ class FileMonitor(FileSystemEventHandler):
                  file_handler: Callable,
                  video_extensions: Set[str],
                  retry_interval: int = 86400,  # 24 hours in seconds
-                 stability_period: int = 10):  # 3 minutes in seconds
+                 stability_period: int = 300):  # 5 minutes in seconds
         self.watch_paths = [Path(p).resolve() for p in watch_paths]
         self.file_handler = file_handler
         self.video_extensions = video_extensions
@@ -115,26 +115,75 @@ class FileMonitor(FileSystemEventHandler):
                 
                 # Stability period has elapsed, process the files
                 files_to_process = list(self.changed_files.keys())
-                self.changed_files.clear()
-                self.last_change_time = None
+                # Don't clear the changed files yet - we'll check if they're still being modified
+                # self.changed_files.clear()
+                # self.last_change_time = None
             
             if files_to_process:
                 logger.info(f"Processing {len(files_to_process)} files after {self.stability_period} seconds of stability")
-                for file_path in files_to_process:
-                    self._process_file(Path(file_path))
+                
+                # Check if files are still being modified (e.g., still being copied/unzipped)
+                stable_files = []
+                for file_path_str in files_to_process:
+                    file_path = Path(file_path_str)
+                    if not self._is_file_stable(file_path):
+                        logger.info(f"File still being modified, deferring: {file_path}")
+                        continue
+                    stable_files.append(file_path_str)
+                
+                # Process only stable files
+                for file_path_str in stable_files:
+                    self._process_file(Path(file_path_str))
+                    # Remove processed files from the changed_files dict
+                    with self.processing_lock:
+                        if file_path_str in self.changed_files:
+                            del self.changed_files[file_path_str]
+                
+                # If we still have unstable files, don't reset the last_change_time
+                with self.processing_lock:
+                    if not self.changed_files:
+                        self.last_change_time = None
             
             # Also check for any pending files that need retry
             self.retry_pending_files()
             
             # Sleep a bit before checking again
-            time.sleep(10)
+            time.sleep(5)
+    
+    def _is_file_stable(self, file_path: Path) -> bool:
+        """Check if a file is stable (not being modified)."""
+        if not file_path.exists():
+            return False
+            
+        try:
+            # Get initial file size
+            initial_size = file_path.stat().st_size
+            # Wait a short time
+            time.sleep(1)
+            # Check if file size has changed
+            if file_path.exists():
+                current_size = file_path.stat().st_size
+                if current_size != initial_size:
+                    logger.debug(f"File size changed from {initial_size} to {current_size}: {file_path}")
+                    return False
+                return True
+            return False
+        except (FileNotFoundError, PermissionError) as e:
+            logger.debug(f"Error checking file stability: {e}")
+            return False
     
     def _process_file(self, file_path: Path):
         """Process a video file."""
         try:
+            # Final check to ensure file exists and is accessible
+            if not file_path.exists():
+                logger.warning(f"File no longer exists: {file_path}")
+                return
+                
             logger.info(f"Processing file: {file_path}")
             success = self.file_handler(str(file_path))
             if not success:
+                logger.warning(f"Failed to process file: {file_path}, adding to pending list.")
                 self.pending_files[str(file_path)] = datetime.now()
         except Exception as e:
             logger.error(f"Error processing {file_path}: {e}")

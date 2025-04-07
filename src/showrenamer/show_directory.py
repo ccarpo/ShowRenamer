@@ -115,10 +115,35 @@ class ShowDirectory:
             # Create parent directories if they don't exist
             dest_file.parent.mkdir(parents=True, exist_ok=True)
             
-            # Move the file
-            source_file.rename(dest_file)
-            logger.info(f"Moved {source_file} to {dest_file}")
-            return True
+            try:
+                # First try a direct move (rename) which is faster but only works on same filesystem
+                source_file.rename(dest_file)
+                logger.info(f"Moved to {dest_file}")
+                return True
+            except OSError as e:
+                # If we get a cross-device link error, fall back to copy and delete
+                if e.errno == 18:  # EXDEV error (Invalid cross-device link)
+                    logger.info(f"Cross-filesystem move detected, using copy+delete for {source_file}")
+                    import shutil
+                    
+                    # Copy the file
+                    shutil.copy2(source_file, dest_file)
+                    
+                    # Verify the copy was successful by checking file sizes
+                    if source_file.stat().st_size == dest_file.stat().st_size:
+                        # Delete the original file
+                        source_file.unlink()
+                        logger.info(f"Copied and deleted to {dest_file}")
+                        return True
+                    else:
+                        # Copy was incomplete, remove the partial file
+                        if dest_file.exists():
+                            dest_file.unlink()
+                        logger.error(f"Copy verification failed for {source_file} to {dest_file}")
+                        return False
+                else:
+                    # Re-raise if it's not a cross-device link error
+                    raise
         except Exception as e:
             logger.error(f"Error moving file {source_file} to {dest_file}: {e}")
             return False

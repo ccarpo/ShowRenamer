@@ -5,8 +5,8 @@ from typing import Dict, List, Optional, Tuple, Set
 from fuzzywuzzy import fuzz
 import logging
 
-from show_directory import ShowDirectory
-from file_logger import FileLogger
+from showrenamer.show_directory import ShowDirectory
+from showrenamer.file_logger import FileLogger
 
 logger = logging.getLogger(__name__)
 
@@ -99,8 +99,8 @@ class FileRenamer:
                     details={
                         "show_name": show_name,
                         "season": episode_info["seasonNumber"],
-                        "episode": episode_info["episodeNumber"],
-                        "episode_title": episode_info.get("episodeName", "")
+                        "episode": episode_info["number"],
+                        "episode_title": episode_info.get("name", "")
                     }
                 )
             except Exception as e:
@@ -120,7 +120,6 @@ class FileRenamer:
             target_dir = self.show_directory.get_target_directory(show_name, episode_info["seasonNumber"])
             moved = self.show_directory.move_file(new_path, show_name, episode_info["seasonNumber"])
             if moved:
-                logger.info(f"Moved to show directory: {moved}")
                 # Log the move operation
                 self.file_logger.log_operation(
                     operation_type="move",
@@ -129,7 +128,7 @@ class FileRenamer:
                     details={
                         "show_name": show_name,
                         "season": episode_info["seasonNumber"],
-                        "episode": episode_info["episodeNumber"]
+                        "episode": episode_info["number"]
                     }
                 )
             else:
@@ -246,7 +245,14 @@ class FileRenamer:
             self.cache.set(cache_key, episodes)
 
         for ep in episodes:
-            if ep.get("seasonNumber") == season and ep.get("number") == episode:
+            # Check for both "number" and "episodeNumber" fields to handle API inconsistencies
+            ep_num = ep.get("number") or ep.get("episodeNumber")
+            if ep.get("seasonNumber") == season and ep_num == episode:
+                # Normalize the episode data to ensure consistent field access
+                if "episodeNumber" not in ep and "number" in ep:
+                    ep["episodeNumber"] = ep["number"]
+                elif "number" not in ep and "episodeNumber" in ep:
+                    ep["number"] = ep["episodeNumber"]
                 return ep
         return None
 
@@ -255,7 +261,13 @@ class FileRenamer:
         try:
             series_name = series_info.get("translations", {}).get("deu") or series_info["name"]
             season_num = episode_info["seasonNumber"]
-            episode_num = episode_info["number"]
+            
+            # Try both possible field names for episode number
+            episode_num = episode_info.get("number") or episode_info.get("episodeNumber")
+            if episode_num is None:
+                logger.error(f"Missing episode number in episode info: {episode_info}")
+                return None
+                
             episode_name = episode_info.get("translations", {}).get("deu") or episode_info.get("name", "")
 
             new_name = f"{series_name} - S{season_num:02d}E{episode_num:02d}"
@@ -263,7 +275,8 @@ class FileRenamer:
                 new_name += f" - {episode_name}"
             
             return f"{new_name}{path.suffix}"
-        except (KeyError, TypeError):
+        except (KeyError, TypeError) as e:  
+            logger.error(f"Error generating filename: {e}, Episode info: {episode_info}")
             return None
 
     def _confirm_rename(self) -> bool:
