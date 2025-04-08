@@ -6,3 +6,4 @@ show_cache.json
 __pycache__/
 venv
 *.egg-info
+config

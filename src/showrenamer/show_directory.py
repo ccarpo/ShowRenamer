@@ -75,15 +75,17 @@ class ShowDirectory:
         """
         # Find show directory
         show_dir = self.find_show_directory(show_name)
+        logger.info(f"Found show directory: {show_dir}")
         if not show_dir:
             logger.debug(f"No directory found for show: {show_name}")
             return None
 
         # Get season directory
         season_dir = self.get_season_directory(show_dir, season_number)
+        logger.info(f"Found season directory: {season_dir}")
         if not season_dir.exists():
-            logger.debug(f"Season directory doesn't exist: {season_dir}")
-            return None
+            logger.info(f"Creating season directory: {season_dir}")
+            season_dir.mkdir(parents=True, exist_ok=True)
             
         return season_dir
         
