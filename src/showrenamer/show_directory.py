@@ -24,13 +24,44 @@ class ShowDirectory:
         return None
 
     def get_season_directory(self, show_dir: Path, season_number: int) -> Path:
-        """Get the path to a season directory, creating it if it doesn't exist."""
+        """Get the path to a season directory, creating it if it doesn't exist.
+        
+        Tries to determine the naming convention used in the show directory by checking
+        for existing season folders. First checks for folders without leading zeros,
+        then checks for folders with leading zeros. If no existing season folders are found,
+        defaults to creating a folder without leading zeros.
+        """
         if season_number == 0:
             season_name = "Specials"
-        else:
-            season_name = f"Season {season_number:02d}"
+            return show_dir / season_name
+
+        # First format: "Season X" (no leading zeros)
+        no_leading_zeros = f"Season {season_number}"
+        # Second format: "Season XX" (with leading zeros)
+        with_leading_zeros = f"Season {season_number:02d}"
         
-        return show_dir / season_name
+        # Check if the specific season directory already exists in either format
+        if (show_dir / no_leading_zeros).exists():
+            return show_dir / no_leading_zeros
+        if (show_dir / with_leading_zeros).exists():
+            return show_dir / with_leading_zeros
+            
+        # If the specific season doesn't exist, determine format from other seasons
+        # First check if any season directories without leading zeros exist
+        test_dir = show_dir / f"Season 1"
+        if test_dir.exists() and test_dir.is_dir():
+            logger.debug(f"Found season directory without leading zeros: {test_dir}")
+            return show_dir / no_leading_zeros
+        
+        # Then check if any season directories with leading zeros exist
+        test_dir = show_dir / f"Season 01"
+        if test_dir.exists() and test_dir.is_dir():
+            logger.debug(f"Found season directory with leading zeros: {test_dir}")
+            return show_dir / with_leading_zeros
+        
+        # If no existing season directories found, default to no leading zeros
+        logger.debug(f"No existing season directories found, using format without leading zeros")
+        return show_dir / no_leading_zeros
 
     def can_move_file(self, source_file: Path, dest_file: Path) -> Dict[str, bool]:
         """Check if a file can be moved to the destination.
