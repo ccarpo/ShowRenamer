@@ -2,6 +2,7 @@
 from pathlib import Path
 from typing import List, Optional, Dict
 import logging
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -10,16 +11,49 @@ class ShowDirectory:
         """Initialize with a list of base directories to search for show folders."""
         self.base_directories = [Path(d) for d in base_directories]
 
+    def normalize_name(self, name: str) -> str:
+        """Normalize a name by replacing special characters.
+        
+        This helps with matching show names to directory names when they contain
+        special characters like colons (:) that might be replaced in directory names.
+        """
+        # Replace common special characters with standard replacements
+        # Colon is often replaced with a space, dash, or removed entirely
+        normalized = re.sub(r':', ' ', name)
+        # Replace other problematic characters
+        normalized = re.sub(r'[\\/*?"<>|]', '', normalized)
+        # Normalize whitespace
+        normalized = re.sub(r'\s+', ' ', normalized).strip()
+        return normalized
+        
     def find_show_directory(self, show_name: str) -> Optional[Path]:
-        """Find the directory containing a show with the exact name."""
+        """Find the directory containing a show with the exact or normalized name."""
         for base_dir in self.base_directories:
             if not base_dir.exists():
                 continue
             
-            # Look for exact match directory
+            # Try exact match first
             show_dir = base_dir / show_name
             if show_dir.exists() and show_dir.is_dir():
                 return show_dir
+            
+            # If exact match fails, try with normalized name
+            normalized_name = self.normalize_name(show_name)
+            if normalized_name != show_name:
+                show_dir = base_dir / normalized_name
+                if show_dir.exists() and show_dir.is_dir():
+                    logger.info(f"Found directory using normalized name: '{normalized_name}' for show '{show_name}'.")
+                    return show_dir
+            
+            # If that fails too, try to find a directory with similar name
+            if base_dir.exists() and base_dir.is_dir():
+                for dir_path in base_dir.iterdir():
+                    if dir_path.is_dir():
+                        # Compare normalized directory name with normalized show name
+                        normalized_dir_name = self.normalize_name(dir_path.name)
+                        if normalized_dir_name == normalized_name:
+                            logger.info(f"Found directory with similar name: '{dir_path.name}' for show '{show_name}'.")
+                            return dir_path
         
         return None
 
