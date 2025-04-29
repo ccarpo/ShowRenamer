@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 import time
 import threading
 import logging
+import re
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
@@ -51,8 +52,14 @@ class FileMonitor(FileSystemEventHandler):
                 # Find all video files recursively
                 for file_path in path.glob('**/*'):
                     if file_path.is_file() and file_path.suffix.lower() in self.video_extensions:
-                        logger.info(f"Found existing file: {file_path}")
-                        self._add_to_changed_files(file_path)
+                        # Check if this file looks like it's already been renamed but not moved
+                        # Files that have been renamed typically have a standard format like "Show Name - S01E01 - Episode Title.ext"
+                        if re.search(r' - S\d+E\d+', file_path.name):
+                            logger.info(f"Found existing renamed file, adding to pending list for retry: {file_path}")
+                            self.pending_files[str(file_path)] = datetime.now() - timedelta(seconds=self.retry_interval)
+                        else:
+                            logger.info(f"Found existing file: {file_path}")
+                            self._add_to_changed_files(file_path)
             else:
                 logger.warning(f"Watch path does not exist or is not a directory: {watch_path}")
 
@@ -96,31 +103,47 @@ class FileMonitor(FileSystemEventHandler):
     
     def _file_processor_loop(self):
         """Background thread that processes files after a period of stability."""
+        # Flag to track if we've done an initial processing
+        initial_processing_done = False
+        last_processing_time = None
+        
         while not self.stop_event.is_set():
-            # Check if there have been any changes
-            with self.processing_lock:
-                if self.last_change_time is None:
-                    # No changes detected yet
-                    time.sleep(1)
-                    continue
-                
-                # Check if the stability period has elapsed since the last change
-                now = datetime.now()
-                time_since_last_change = (now - self.last_change_time).total_seconds()
-                
-                if time_since_last_change < self.stability_period:
-                    # Not stable yet, wait more
-                    time.sleep(1)
-                    continue
-                
-                # Stability period has elapsed, process the files
-                files_to_process = list(self.changed_files.keys())
-                # Don't clear the changed files yet - we'll check if they're still being modified
-                # self.changed_files.clear()
-                # self.last_change_time = None
+            process_now = False
+            files_to_process = []
             
+            with self.processing_lock:
+                # Case 1: Initial startup - set a timestamp to process files after stability period
+                if not initial_processing_done and self.last_change_time is None:
+                    self.last_change_time = datetime.now()
+                    initial_processing_done = True
+                    time.sleep(1)
+                    continue
+                
+                # Case 2: Check if stability period has elapsed since last change
+                if self.last_change_time is not None:
+                    now = datetime.now()
+                    time_since_last_change = (now - self.last_change_time).total_seconds()
+                    
+                    if time_since_last_change >= self.stability_period:
+                        # Stability period has elapsed, process any files
+                        process_now = True
+                        files_to_process = list(self.changed_files.keys())
+                
+                # Case 3: Periodic check for any unprocessed files even when no new changes
+                if not process_now and self.changed_files:
+                    now = datetime.now()
+                    # If we haven't processed files in a while, do it now
+                    if last_processing_time is None or (now - last_processing_time).total_seconds() >= self.stability_period:
+                        process_now = True
+                        files_to_process = list(self.changed_files.keys())
+            
+            if not process_now:
+                time.sleep(1)
+                continue
+                
             if files_to_process:
-                logger.info(f"Processing {len(files_to_process)} files after {self.stability_period} seconds of stability")
+                logger.info(f"Processing {len(files_to_process)} files")
+                last_processing_time = datetime.now()
                 
                 # Check if files are still being modified (e.g., still being copied/unzipped)
                 stable_files = []

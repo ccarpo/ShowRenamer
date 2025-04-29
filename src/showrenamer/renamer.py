@@ -26,6 +26,7 @@ class FileRenamer:
         self.interactive = interactive
         self.dry_run = dry_run
         self.rename_only = rename_only
+        self.show_directories = show_directories
         self.show_directory = ShowDirectory(show_directories)
         self.file_logger = FileLogger(log_dir)
         self.video_extensions = {
@@ -62,6 +63,12 @@ class FileRenamer:
         # Determine what operations to perform
         should_rename = True  # Always rename unless rename-only mode is active
         should_move = not self.rename_only  # Move unless rename-only mode
+        
+        # Check if episode has a name (either default or translated)
+        has_episode_name = bool(episode_info.get("translations", {}).get("deu") or episode_info.get("name", ""))
+        if not has_episode_name:
+            logger.warning(f"No episode name found for {path.name}. Will rename but not move.")
+            should_move = False
         
         # Check if we're in dry-run mode
         if self.dry_run:
@@ -131,6 +138,7 @@ class FileRenamer:
                         "episode": episode_info["number"]
                     }
                 )
+                return True
             else:
                 logger.warning(f"File not moved: {new_path}")
                 # Log the failed move operation
@@ -145,7 +153,10 @@ class FileRenamer:
                         "reason": "No suitable target directory found"
                     }
                 )
+                # Return False to indicate failure and trigger retry
+                return False
         
+        # If we only needed to rename or if we're in dry run mode, return success
         return True
 
     def parse_filename(self, filename: str) -> Optional[Tuple[str, int, int]]:
@@ -193,6 +204,34 @@ class FileRenamer:
         name = " ".join(name.split())
         return self.config.mapping.get(name, name)
 
+    def update_show_directories(self, show_directories: List[str]):
+        """Update the show directories used for moving files.
+        
+        Args:
+            show_directories: List of directory paths to use for show directories
+        """
+        self.show_directories = show_directories
+        self.show_directory = ShowDirectory(show_directories)
+        logger.info(f"Updated show directories: {show_directories}")
+        
+    def update_patterns(self, patterns: Dict):
+        """Update the patterns used for filename parsing.
+        
+        Args:
+            patterns: Updated patterns configuration
+        """
+        logger.info("Patterns configuration updated")
+        # No need to store patterns locally as we reference self.config.patterns
+        
+    def update_mapping(self, mapping: Dict):
+        """Update the series name mapping.
+        
+        Args:
+            mapping: Updated mapping configuration
+        """
+        logger.info("Series mapping configuration updated")
+        # No need to store mapping locally as we reference self.config.mapping
+        
     def _get_series_info(self, show_name: str) -> Optional[Dict]:
         """Get series information from cache or API."""
         cached_info = self.cache.get(f"series_{show_name}")
@@ -239,8 +278,26 @@ class FileRenamer:
         """Get episode information from cache or API."""
         cache_key = f"episodes_{series_id}"
         episodes = self.cache.get(cache_key)
+        refresh_cache = False
         
         if not episodes:
+            refresh_cache = True
+        else:
+            # Check if we have the episode in cache but with missing information
+            for ep in episodes:
+                ep_num = ep.get("number") or ep.get("episodeNumber")
+                if ep.get("seasonNumber") == season and ep_num == episode:
+                    # Check if episode name is missing
+                    has_name = bool(ep.get("name"))
+                    has_translation = bool(ep.get("translations", {}).get("deu"))
+                    
+                    # Refresh cache if both names are missing
+                    if not has_name and not has_translation:
+                        logger.info(f"Episode S{season}E{episode} found in cache but missing name/translation. Refreshing from API.")
+                        refresh_cache = True
+                    break
+        
+        if refresh_cache:
             episodes = self.api_client.get_episode_info(series_id)
             self.cache.set(cache_key, episodes)
 

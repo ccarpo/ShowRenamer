@@ -2,7 +2,7 @@
 import os
 import argparse
 import time
-from typing import List
+from typing import List, Dict
 from dotenv import load_dotenv
 import logging
 
@@ -11,6 +11,7 @@ from showrenamer.cache import Cache
 from showrenamer.config import Config
 from showrenamer.renamer import FileRenamer
 from showrenamer.file_monitor import FileMonitor
+from showrenamer.config_watcher import ConfigWatcher
 
 # Set up logging
 logging.basicConfig(
@@ -29,7 +30,7 @@ class ShowRenamerApp:
                  dry_run: bool = False,
                  rename_only: bool = False,
                  retry_interval: int = 86400,  # 24 hours in seconds
-                 stability_period: int = 180,  # 3 minutes in seconds
+                 stability_period: int = 300,  # 3 minutes in seconds
                  shows_dirs: List[str] = None):
         self.config = Config(config_dir)
         self.cache = Cache(
@@ -77,7 +78,46 @@ class ShowRenamerApp:
             retry_interval=retry_interval,
             stability_period=stability_period
         )
+        
+        # Set up config watcher - exclude cache file from being watched
+        config_files_to_watch = {k: v for k, v in self.config.config_files.items() if k != 'cache'}
+        self.config_watcher = ConfigWatcher(
+            self.config.config_dir,
+            config_files_to_watch,
+            self.config.reload_config
+        )
+        
+        # Register callbacks for configuration changes
+        self.config.register_config_change_callback('directories', self._on_directories_changed)
+        self.config.register_config_change_callback('patterns', self._on_patterns_changed)
+        self.config.register_config_change_callback('mapping', self._on_mapping_changed)
 
+    def _on_directories_changed(self, directories: Dict):
+        """Handle changes to the show directories configuration.
+        
+        Args:
+            directories: Updated directories configuration
+        """
+        logger.info("Show directories configuration changed")
+        show_directories = directories.get("show_directories", [])
+        self.renamer.update_show_directories(show_directories)
+        
+    def _on_patterns_changed(self, patterns: Dict):
+        """Handle changes to the name patterns configuration.
+        
+        Args:
+            patterns: Updated patterns configuration
+        """
+        self.renamer.update_patterns(patterns)
+        
+    def _on_mapping_changed(self, mapping: Dict):
+        """Handle changes to the series mapping configuration.
+        
+        Args:
+            mapping: Updated mapping configuration
+        """
+        self.renamer.update_mapping(mapping)
+    
     def run(self):
         """Run the application."""
         try:
@@ -92,6 +132,10 @@ class ShowRenamerApp:
             # Start the file monitor
             self.monitor.start()
             
+            # Start the config watcher
+            self.config_watcher.start()
+            logger.info("Configuration hot-reloading enabled")
+            
             # Process existing files in monitored directories
             logger.info("Scanning for existing files in monitored directories...")
             self.monitor.process_existing_files()
@@ -101,8 +145,9 @@ class ShowRenamerApp:
                 time.sleep(60)
                 
         except KeyboardInterrupt:
-            logger.info("\nStopping file monitor...")
+            logger.info("\nStopping file monitor and config watcher...")
             self.monitor.stop()
+            self.config_watcher.stop()
 
 def main():
     parser = argparse.ArgumentParser(description="Show Renamer - Automatically rename TV show files")
@@ -168,7 +213,7 @@ def main():
         cache_ttl_days=args.cache_ttl,
         dry_run=dry_run,
         rename_only=rename_only,
-        retry_interval=int(os.getenv('SHOWRENAMER_RETRY_INTERVAL', '86400')),  # 24 hours
+        retry_interval=int(os.getenv('SHOWRENAMER_RETRY_INTERVAL', '86400')),  # 4 hours
         stability_period=int(os.getenv('SHOWRENAMER_STABILITY_PERIOD', '300')),  # 5 minutes
         shows_dirs=args.shows_dir
     )
