@@ -182,16 +182,18 @@ class FileRenamer:
 
     def _clean_show_name(self, name: str) -> str:
         """Clean show name using configured patterns."""
-        name = name.strip()
+        # Get strings to remove and sort by length (longest first)
+        strings_to_remove = sorted(
+            self.config.patterns.get("strings_to_remove", []),
+            key=len,
+            reverse=True
+        )
         
-        # Remove prefixes
-        for prefix in self.config.patterns["prefixes"]:
-            name = re.sub(prefix, "", name)
-        
-        # Remove suffixes
-        for suffix in self.config.patterns["suffixes"]:
-            name = re.sub(suffix, "", name, flags=re.IGNORECASE)
-        
+        # Remove strings from the strings_to_remove list with case-insensitive matching
+        for string_to_remove in strings_to_remove:
+            # Use regex with case-insensitive flag to replace the string
+            name = re.sub(re.escape(string_to_remove), "", name, flags=re.IGNORECASE)
+    
         # Apply replacements
         if self.config.patterns["replacements"]["dots_to_spaces"]:
             name = name.replace(".", " ")
@@ -200,8 +202,10 @@ class FileRenamer:
         if self.config.patterns["replacements"]["dashes_to_spaces"]:
             name = name.replace("-", " ")
         
-        # Clean up extra spaces and apply mapping
-        name = " ".join(name.split())
+        # Clean up multiple spaces
+        name = re.sub(r'\s+', ' ', name).strip()
+        
+        # Apply mapping if available
         return self.config.mapping.get(name, name)
 
     def update_show_directories(self, show_directories: List[str]):

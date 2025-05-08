@@ -119,13 +119,10 @@ class Config:
 
     def _default_patterns(self) -> Dict:
         return {
-            "prefixes": [
-                r"^\d{1,4}[a-z]{1,3}[-.]",
-                r"^(?:tt|tv|show)[-.]"
-            ],
-            "suffixes": [
-                r"[-.](?:sd|hd|720p|1080p|x264|aac|dtshd|bluray)",
-                r"[-.](?:web|webrip|hdtv|proper|internal)"
+            "strings_to_remove": [
+                "tt", "tv", "tvs", "itg", "show", 
+                "sd", "hd", "720p", "1080p", "x264", "aac", "dtshd", "bluray", "azhd",
+                "web", "webrip", "hdtv", "proper", "internal", "german", "dl", "ded"
             ],
             "replacements": {
                 "dots_to_spaces": True,
@@ -135,7 +132,7 @@ class Config:
             "patterns": [
                 r"^(.*?)\s*-\s*s(\d{1,2})e(\d{1,2})\s*-",
                 r"^(.*?)\s*-\s*s(\d{1,2})e(\d{1,2})(?:\s|$|\.|\[)",
-                r"[._-]s(\d{1,2})e(\d{1,2})"
+                r"(\\d)(\\d{2})$"
             ]
         }
 
