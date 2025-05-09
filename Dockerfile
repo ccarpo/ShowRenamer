@@ -19,10 +19,7 @@ RUN pip install --no-cache-dir -r requirements.txt && \
     pip install --no-cache-dir .
 
 # Create config directory
-RUN mkdir -p /config
-
-# Create media directories
-RUN mkdir -p /media/shows /media/incoming
+RUN mkdir -p /config /media/shows /media/incoming
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1

@@ -216,16 +216,34 @@ class FileMonitor(FileSystemEventHandler):
         """Retry processing of pending files."""
         now = datetime.now()
         retry_files = []
+        files_to_remove = []
         
+        # First, check all pending files and remove those that no longer exist
         for file_path, last_attempt in list(self.pending_files.items()):
-            if now - last_attempt >= timedelta(seconds=self.retry_interval):
+            path_obj = Path(file_path)
+            if not path_obj.exists():
+                # File no longer exists (likely moved successfully), remove from pending
+                files_to_remove.append(file_path)
+                logger.info(f"Removing non-existent file from pending list: {file_path}")
+            elif now - last_attempt >= timedelta(seconds=self.retry_interval):
+                # File exists and is due for retry
                 retry_files.append(file_path)
+        
+        # Remove non-existent files from pending list
+        for file_path in files_to_remove:
+            del self.pending_files[file_path]
         
         if retry_files:
             logger.info(f"Retrying {len(retry_files)} pending files")
             
         for file_path in retry_files:
             try:
+                # Double-check file still exists before processing
+                if not Path(file_path).exists():
+                    logger.info(f"File no longer exists, removing from pending: {file_path}")
+                    del self.pending_files[file_path]
+                    continue
+                    
                 success = self.file_handler(file_path)
                 if success:
                     del self.pending_files[file_path]
