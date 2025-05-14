@@ -16,18 +16,35 @@ class ShowDirectory:
         
         This helps with matching show names to directory names when they contain
         special characters like colons (:) that might be replaced in directory names.
+        Hyphens (-) can be either replaced by ' - ' or removed entirely.
         """
         # Replace common special characters with standard replacements
-        # Colon is often replaced with a space, dash, or removed entirely
-        normalized = re.sub(r':', ' ', name)
-        # Replace other problematic characters
-        normalized = re.sub(r'[\\/*?"<>|]', '', normalized)
+        normalized = re.sub(r'[\\/*?"<>|:]', '', name)
         # Normalize whitespace
         normalized = re.sub(r'\s+', ' ', normalized).strip()
-        return normalized
+        
+        # Create variants for hyphen handling
+        variants = [normalized]
+        
+        # Variant 1: Replace hyphens with spaced hyphens
+        if '-' in normalized:
+            spaced_hyphens = re.sub(r'\s*-\s*', ' - ', normalized)
+            variants.append(spaced_hyphens)
+            
+        # Variant 2: Remove hyphens entirely
+        if '-' in normalized:
+            no_hyphens = re.sub(r'\s*-\s*', ' ', normalized)
+            no_hyphens = re.sub(r'\s+', ' ', no_hyphens).strip()
+            variants.append(no_hyphens)
+            
+        return variants
         
     def find_show_directory(self, show_name: str) -> Optional[Path]:
-        """Find the directory containing a show with the exact or normalized name."""
+        """Find the directory containing a show with the exact or normalized name.
+        
+        Handles different variants of the show name, particularly with respect to hyphens
+        which can be formatted as ' - ' or removed entirely.
+        """
         for base_dir in self.base_directories:
             if not base_dir.exists():
                 continue
@@ -36,24 +53,31 @@ class ShowDirectory:
             show_dir = base_dir / show_name
             if show_dir.exists() and show_dir.is_dir():
                 return show_dir
+                
+            # Try all normalized variants
+            name_variants = self.normalize_name(show_name)
             
-            # If exact match fails, try with normalized name
-            normalized_name = self.normalize_name(show_name)
-            if normalized_name != show_name:
-                show_dir = base_dir / normalized_name
-                if show_dir.exists() and show_dir.is_dir():
-                    logger.info(f"Found directory using normalized name: '{normalized_name}' for show '{show_name}'.")
-                    return show_dir
+            # Try each variant as an exact directory name
+            for variant in name_variants:
+                if variant != show_name:  # Already tried the original name
+                    show_dir = base_dir / variant
+                    if show_dir.exists() and show_dir.is_dir():
+                        logger.info(f"Found directory using normalized variant: '{variant}' for show '{show_name}'.") 
+                        return show_dir
             
             # If that fails too, try to find a directory with similar name
             if base_dir.exists() and base_dir.is_dir():
                 for dir_path in base_dir.iterdir():
                     if dir_path.is_dir():
-                        # Compare normalized directory name with normalized show name
-                        normalized_dir_name = self.normalize_name(dir_path.name)
-                        if normalized_dir_name == normalized_name:
-                            logger.info(f"Found directory with similar name: '{dir_path.name}' for show '{show_name}'.")
-                            return dir_path
+                        # Get normalized variants of the directory name
+                        dir_variants = self.normalize_name(dir_path.name)
+                        
+                        # Check if any show name variant matches any directory name variant
+                        for show_variant in name_variants:
+                            for dir_variant in dir_variants:
+                                if show_variant == dir_variant:
+                                    logger.info(f"Found directory with similar name: '{dir_path.name}' for show '{show_name}'.") 
+                                    return dir_path
         
         return None
 
