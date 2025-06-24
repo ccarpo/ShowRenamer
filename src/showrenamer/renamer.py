@@ -34,28 +34,30 @@ class FileRenamer:
             '.wmv', '.flv', '.mpg', '.mpeg', '.m2ts'
         }
 
-    def process_file(self, file_path: str) -> bool:
+    def process_file(self, file_path: str) -> tuple[bool, str | None]:
         """Process a single file for renaming."""
         path = Path(file_path)
-        if not path.exists() or path.suffix.lower() not in self.video_extensions:
-            return False
+        if not path.exists():
+            return False, "File does not exist"
+        if path.suffix.lower() not in self.video_extensions:
+            return False, f"Unsupported file extension: {path.suffix}"
 
         parsed_info = self.parse_filename(path.name)
         if not parsed_info:
-            return False
+            return False, "Filename could not be parsed for show/season/episode info"
 
         show_name, season, episode = parsed_info
         series_info = self._get_series_info(show_name)
         if not series_info:
-            return False
+            return False, f"Series info not found for show: {show_name}"
 
         episode_info = self._get_episode_info(series_info['id'], season, episode)
         if not episode_info:
-            return False
+            return False, f"Episode info not found for show: {show_name}, season: {season}, episode: {episode}"
 
         new_name = self._generate_new_filename(path, series_info, episode_info)
         if not new_name:
-            return False
+            return False, "Failed to generate new filename"
 
         # Get the show name from series info (prefer German title if available)
         show_name = series_info.get("translations", {}).get("deu") or series_info["name"]
@@ -69,6 +71,7 @@ class FileRenamer:
         if not has_episode_name:
             logger.warning(f"No episode name found for {path.name}. Will rename but not move.")
             should_move = False
+            # Not a hard failure, just disables move
         
         # Check if we're in dry-run mode
         if self.dry_run:
@@ -83,11 +86,11 @@ class FileRenamer:
             
             if self.interactive and not self.dry_run:
                 if not self._confirm_rename():
-                    return False
+                    return False, "Rename confirmation declined by user"
             
             # In dry-run mode, always return success without making changes
             if self.dry_run:
-                return True
+                return True, None
         
         # Perform the actual operations
         new_path = path
@@ -120,7 +123,7 @@ class FileRenamer:
                     success=False,
                     details={"error": str(e)}
                 )
-                return False
+                return False, f"Error renaming file: {e}"
 
         # Then try to move to show directory if needed
         if should_move and not self.dry_run:
@@ -138,7 +141,7 @@ class FileRenamer:
                         "episode": episode_info["number"]
                     }
                 )
-                return True
+                return True, None
             else:
                 logger.warning(f"File not moved: {new_path}")
                 # Log the failed move operation
@@ -154,10 +157,10 @@ class FileRenamer:
                     }
                 )
                 # Return False to indicate failure and trigger retry
-                return False
+                return False, "No suitable target directory found for move operation"
         
         # If we only needed to rename or if we're in dry run mode, return success
-        return True
+        return True, None
 
     def parse_filename(self, filename: str) -> Optional[Tuple[str, int, int]]:
         """Extract show name, season, and episode from filename."""

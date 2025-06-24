@@ -202,11 +202,18 @@ class FileMonitor(FileSystemEventHandler):
             if not file_path.exists():
                 logger.warning(f"File no longer exists: {file_path}")
                 return
-                
+
             logger.info(f"Processing file: {file_path}")
-            success = self.file_handler(str(file_path))
+            result = self.file_handler(str(file_path))
+            if isinstance(result, tuple):
+                success, reason = result
+            else:
+                success, reason = (bool(result), None)
             if not success:
-                logger.warning(f"Failed to process file: {file_path}, adding to pending list.")
+                msg = f"Failed to process file: {file_path}"
+                if reason:
+                    msg += f". Reason: {reason}"
+                logger.warning(msg)
                 self.pending_files[str(file_path)] = datetime.now()
         except Exception as e:
             logger.error(f"Error processing {file_path}: {e}")
