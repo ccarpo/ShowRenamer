@@ -34,6 +34,25 @@ class FileRenamer:
             '.wmv', '.flv', '.mpg', '.mpeg', '.m2ts'
         }
 
+    def _generate_unique_name(self, directory: Path, filename: str) -> str:
+        """Return a filename that does not already exist in the directory.
+
+        If `filename` exists, appends " (n)" before the extension, incrementing n
+        until a free name is found.
+        """
+        target = directory / filename
+        if not target.exists():
+            return filename
+
+        stem = Path(filename).stem
+        suffix = Path(filename).suffix
+        counter = 1
+        while True:
+            candidate = f"{stem} ({counter}){suffix}"
+            if not (directory / candidate).exists():
+                return candidate
+            counter += 1
+
     def process_file(self, file_path: str) -> tuple[bool, str | None]:
         """Process a single file for renaming."""
         path = Path(file_path)
@@ -51,7 +70,13 @@ class FileRenamer:
         if not series_info:
             return False, f"Series info not found for show: {show_name}"
 
-        episode_info = self._get_episode_info(series_info['id'], season, episode)
+        # Get series ID - handle different possible field names from API
+        series_id = series_info.get('id') or series_info.get('tvdb_id') or series_info.get('seriesId')
+        if not series_id:
+            logger.error(f"Series info missing ID field. Available keys: {list(series_info.keys())}")
+            return False, f"Series info missing ID for show: {show_name}"
+
+        episode_info = self._get_episode_info(series_id, season, episode)
         if not episode_info:
             return False, f"Episode info not found for show: {show_name}, season: {season}, episode: {episode}"
 
@@ -61,6 +86,10 @@ class FileRenamer:
 
         # Get the show name from series info (prefer German title if available)
         show_name = series_info.get("translations", {}).get("deu") or series_info["name"]
+        
+        # Apply colon replacement if configured (for directory matching)
+        if self.config.patterns["replacements"].get("colons_to_dash", False):
+            show_name = show_name.replace(":", " -")
         
         # Determine what operations to perform
         should_rename = True  # Always rename unless rename-only mode is active
@@ -76,7 +105,9 @@ class FileRenamer:
         # Check if we're in dry-run mode
         if self.dry_run:
             if should_rename:
-                logger.info(f"[DRY RUN] Would rename: {path.name} -> {new_name}")
+                # Show the actual name that would be used, respecting uniqueness
+                preview_name = self._generate_unique_name(path.parent, new_name)
+                logger.info(f"[DRY RUN] Would rename: {path.name} -> {preview_name}")
             if should_move:
                 target_dir = self.show_directory.get_target_directory(show_name, episode_info["seasonNumber"])
                 if target_dir:
@@ -97,10 +128,12 @@ class FileRenamer:
         
         # First rename in place if needed
         if should_rename and not self.dry_run:
-            new_path = path.parent / new_name
+            # Ensure we never overwrite an existing file by generating a unique name
+            safe_new_name = self._generate_unique_name(path.parent, new_name)
+            new_path = path.parent / safe_new_name
             try:
                 path.rename(new_path)
-                logger.info(f"Renamed: {path.name} -> {new_name}")
+                logger.info(f"Renamed: {path.name} -> {new_path.name}")
                 # Log the rename operation
                 self.file_logger.log_operation(
                     operation_type="rename",
@@ -185,6 +218,14 @@ class FileRenamer:
 
     def _clean_show_name(self, name: str) -> str:
         """Clean show name using configured patterns."""
+        # First, apply regex patterns if configured
+        regex_patterns = self.config.patterns.get("strings_to_remove_regex", [])
+        for pattern in regex_patterns:
+            try:
+                name = re.sub(pattern, "", name)
+            except re.error as e:
+                logger.warning(f"Invalid regex pattern '{pattern}': {e}")
+        
         # Get strings to remove and sort by length (longest first)
         strings_to_remove = sorted(
             self.config.patterns.get("strings_to_remove", []),
@@ -333,6 +374,11 @@ class FileRenamer:
                 return None
                 
             episode_name = episode_info.get("translations", {}).get("deu") or episode_info.get("name", "")
+
+            # Apply colon replacement if configured
+            if self.config.patterns["replacements"].get("colons_to_dash", False):
+                series_name = series_name.replace(":", " -")
+                episode_name = episode_name.replace(":", " -")
 
             new_name = f"{series_name} - S{season_num:02d}E{episode_num:02d}"
             if episode_name:

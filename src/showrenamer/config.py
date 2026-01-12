@@ -90,8 +90,19 @@ class Config:
         """Load a specific configuration file."""
         file_path = os.path.join(self.config_dir, self.config_files[config_type])
         if os.path.exists(file_path):
-            with open(file_path, 'r', encoding='utf-8') as f:
-                return json.load(f)
+            try:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                    if not content.strip():
+                        logger.warning(f"Config file {file_path} is empty, using existing config")
+                        return getattr(self, config_type, default_data)
+                    return json.loads(content)
+            except json.JSONDecodeError as e:
+                logger.warning(f"Failed to parse config file {file_path}: {e}. Using existing config.")
+                return getattr(self, config_type, default_data)
+            except Exception as e:
+                logger.error(f"Error loading config file {file_path}: {e}. Using existing config.")
+                return getattr(self, config_type, default_data)
         else:
             self._save_file(config_type, default_data)
             return default_data
@@ -124,10 +135,14 @@ class Config:
                 "sd", "hd", "720p", "1080p", "x264", "aac", "dtshd", "bluray", "azhd",
                 "web", "webrip", "hdtv", "proper", "internal", "german", "dl", "ded"
             ],
+            "strings_to_remove_regex": [
+                r"(?i)^(?:tt|tv|tvs|dl|ded|sed|sd|hd|4sf)[-_.\s]"
+            ],
             "replacements": {
                 "dots_to_spaces": True,
                 "underscores_to_spaces": True,
-                "dashes_to_spaces": True
+                "dashes_to_spaces": True,
+                "colons_to_dash": True
             },
             "patterns": [
                 r"^(.*?)\s*-\s*s(\d{1,2})e(\d{1,2})\s*-",

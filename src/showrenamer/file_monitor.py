@@ -89,11 +89,29 @@ class FileMonitor(FileSystemEventHandler):
                 
     def on_moved(self, event):
         """Handle file move events."""
-        if not event.is_directory and event.dest_path:
-            file_path = Path(event.dest_path)
-            if file_path.suffix.lower() in self.video_extensions:
-                logger.debug(f"File moved to: {file_path}")
-                self._add_to_changed_files(file_path)
+        if not event.is_directory:
+            # Remove the old source path from queues
+            if event.src_path:
+                src = Path(event.src_path)
+                with self.processing_lock:
+                    self.changed_files.pop(str(src), None)
+                    self.pending_files.pop(str(src), None)
+            # Track the destination if it's a video file
+            if event.dest_path:
+                dest = Path(event.dest_path)
+                if dest.suffix.lower() in self.video_extensions:
+                    logger.debug(f"File moved to: {dest}")
+                    self._add_to_changed_files(dest)
+
+    def on_deleted(self, event):
+        """Handle file deletion events by removing from queues."""
+        if not event.is_directory:
+            path = Path(event.src_path)
+            with self.processing_lock:
+                removed_cf = self.changed_files.pop(str(path), None)
+                removed_pf = self.pending_files.pop(str(path), None)
+            if removed_cf or removed_pf:
+                logger.debug(f"File deleted, removed from queues: {path}")
 
     def _add_to_changed_files(self, file_path: Path):
         """Add a file to the changed files list and update the last change time."""
@@ -112,6 +130,12 @@ class FileMonitor(FileSystemEventHandler):
             files_to_process = []
             
             with self.processing_lock:
+                # Cleanup: remove any non-existent files from the changed_files queue
+                if self.changed_files:
+                    cleanup_keys = [k for k in list(self.changed_files.keys()) if not Path(k).exists()]
+                    for k in cleanup_keys:
+                        logger.info(f"Cleanup: removing non-existent file from queue: {k}")
+                        self.changed_files.pop(k, None)
                 # Case 1: Initial startup - set a timestamp to process files after stability period
                 if not initial_processing_done and self.last_change_time is None:
                     self.last_change_time = datetime.now()
@@ -149,6 +173,13 @@ class FileMonitor(FileSystemEventHandler):
                 stable_files = []
                 for file_path_str in files_to_process:
                     file_path = Path(file_path_str)
+                    # If the file no longer exists, remove it from queue
+                    if not file_path.exists():
+                        logger.info(f"File no longer exists, removing from queue: {file_path}")
+                        with self.processing_lock:
+                            if file_path_str in self.changed_files:
+                                del self.changed_files[file_path_str]
+                        continue
                     if not self._is_file_stable(file_path):
                         logger.info(f"File still being modified, deferring: {file_path}")
                         continue

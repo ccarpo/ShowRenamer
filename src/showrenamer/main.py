@@ -127,7 +127,7 @@ class ShowRenamerApp:
             
             logger.info("Starting file monitor...")
             logger.info(f"Show directories: {self.config.directories['show_directories']}")
-            logger.info("File processing will begin after 3 minutes of stability")
+            logger.info(f"File processing will begin after {self.monitor.stability_period} seconds of stability")
             
             # Start the file monitor
             self.monitor.start()
@@ -188,7 +188,7 @@ def main():
     # If --show-dir is specified, add those directories
     if args.shows_dir:
         show_dirs = config.directories.get("show_directories", [])
-        for dir_path in args.show_dir:
+        for dir_path in args.shows_dir:
             if dir_path not in show_dirs:
                 show_dirs.append(dir_path)
         config.directories["show_directories"] = show_dirs
