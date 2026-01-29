@@ -26,12 +26,12 @@ class FileLogger:
         self.log_dir = Path(log_dir)
         self.log_dir.mkdir(parents=True, exist_ok=True)
         self.log_file = self.log_dir / "file_operations.log"
-        self.json_log_file = self.log_dir / "file_operations.json"
+        self.json_log_file = self.log_dir / "file_operations.jsonl"  # JSONL format (JSON Lines)
+        self.max_log_size = 10 * 1024 * 1024  # 10MB max size before rotation
         
-        # Initialize JSON log if it doesn't exist
+        # Create empty JSONL file if it doesn't exist
         if not self.json_log_file.exists():
-            with open(self.json_log_file, 'w') as f:
-                json.dump([], f)
+            self.json_log_file.touch()
     
     def log_operation(self, 
                       operation_type: str, 
@@ -70,17 +70,31 @@ class FileLogger:
             if details:
                 f.write(f"  Details: {json.dumps(details)}\n")
         
-        # Log to JSON file
+        # Log to JSONL file (append-only, one JSON object per line)
         try:
-            with open(self.json_log_file, 'r') as f:
-                log_data = json.load(f)
+            # Check if rotation is needed
+            if self.json_log_file.exists() and self.json_log_file.stat().st_size > self.max_log_size:
+                self._rotate_log()
             
-            log_data.append(log_entry)
-            
-            with open(self.json_log_file, 'w') as f:
-                json.dump(log_data, f, indent=2)
+            # Append the log entry as a single line
+            with open(self.json_log_file, 'a') as f:
+                f.write(json.dumps(log_entry) + '\n')
         except Exception as e:
             logger.error(f"Error writing to JSON log: {e}")
+    
+    def _rotate_log(self):
+        """Rotate the log file when it gets too large."""
+        try:
+            # Rename current log to .old
+            old_log = self.log_dir / "file_operations.old.jsonl"
+            if old_log.exists():
+                old_log.unlink()  # Delete the old backup
+            self.json_log_file.rename(old_log)
+            # Create new empty log
+            self.json_log_file.touch()
+            logger.info(f"Rotated log file. Old log saved to {old_log}")
+        except Exception as e:
+            logger.error(f"Error rotating log file: {e}")
     
     def get_recent_operations(self, limit: int = 50) -> List[Dict]:
         """Get recent file operations.
@@ -92,11 +106,19 @@ class FileLogger:
             List of recent operations
         """
         try:
-            with open(self.json_log_file, 'r') as f:
-                log_data = json.load(f)
+            log_data = []
+            if self.json_log_file.exists():
+                with open(self.json_log_file, 'r') as f:
+                    for line in f:
+                        line = line.strip()
+                        if line:
+                            try:
+                                log_data.append(json.loads(line))
+                            except json.JSONDecodeError:
+                                continue  # Skip corrupted lines
             
             # Sort by timestamp (newest first) and limit
-            sorted_data = sorted(log_data, key=lambda x: x["timestamp"], reverse=True)
+            sorted_data = sorted(log_data, key=lambda x: x.get("timestamp", ""), reverse=True)
             return sorted_data[:limit]
         except Exception as e:
             logger.error(f"Error reading JSON log: {e}")
@@ -113,17 +135,25 @@ class FileLogger:
         """
         file_path = str(file_path)
         try:
-            with open(self.json_log_file, 'r') as f:
-                log_data = json.load(f)
+            log_data = []
+            if self.json_log_file.exists():
+                with open(self.json_log_file, 'r') as f:
+                    for line in f:
+                        line = line.strip()
+                        if line:
+                            try:
+                                log_data.append(json.loads(line))
+                            except json.JSONDecodeError:
+                                continue  # Skip corrupted lines
             
             # Filter operations for this file (either as source or target)
             file_operations = [
                 op for op in log_data 
-                if op["source_file"] == file_path or op["target_file"] == file_path
+                if op.get("source_file") == file_path or op.get("target_file") == file_path
             ]
             
             # Sort by timestamp (newest first)
-            return sorted(file_operations, key=lambda x: x["timestamp"], reverse=True)
+            return sorted(file_operations, key=lambda x: x.get("timestamp", ""), reverse=True)
         except Exception as e:
             logger.error(f"Error reading JSON log: {e}")
             return []

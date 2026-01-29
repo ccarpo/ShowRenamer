@@ -85,14 +85,21 @@ class FileRenamer:
             return False, "Failed to generate new filename"
 
         # Get the show name from series info (prefer German title if available)
-        show_name = series_info.get("translations", {}).get("deu") or series_info["name"]
+        show_name = series_info.get("translations", {}).get("deu") or series_info.get("name")
+        if not show_name:
+            return False, "Series name not found in API response"
         
         # Apply colon replacement if configured (for directory matching)
         if self.config.patterns["replacements"].get("colons_to_dash", False):
             show_name = show_name.replace(":", " -")
         
+        # Check if file is already properly named (ignoring duplicate suffixes like " (1)")
+        current_name = path.name
+        # Strip duplicate suffix pattern like " (1)", " (2)", etc.
+        current_name_base = re.sub(r' \(\d+\)(?=\.[^.]+$)', '', current_name)
+        
         # Determine what operations to perform
-        should_rename = True  # Always rename unless rename-only mode is active
+        should_rename = current_name_base != new_name  # Only rename if name is different
         should_move = not self.rename_only  # Move unless rename-only mode
         
         # Check if episode has a name (either default or translated)
@@ -161,7 +168,12 @@ class FileRenamer:
         # Then try to move to show directory if needed
         if should_move and not self.dry_run:
             target_dir = self.show_directory.get_target_directory(show_name, episode_info["seasonNumber"])
-            moved = self.show_directory.move_file(new_path, show_name, episode_info["seasonNumber"])
+            moved = self.show_directory.move_file(
+                new_path,
+                show_name,
+                episode_info["seasonNumber"],
+                season_dir=target_dir,
+            )
             if moved:
                 # Log the move operation
                 self.file_logger.log_operation(
@@ -373,12 +385,13 @@ class FileRenamer:
                 logger.error(f"Missing episode number in episode info: {episode_info}")
                 return None
                 
-            episode_name = episode_info.get("translations", {}).get("deu") or episode_info.get("name", "")
+            episode_name = episode_info.get("translations", {}).get("deu") or episode_info.get("name") or ""
 
             # Apply colon replacement if configured
             if self.config.patterns["replacements"].get("colons_to_dash", False):
                 series_name = series_name.replace(":", " -")
-                episode_name = episode_name.replace(":", " -")
+                if episode_name:  # Only replace if episode_name is not None or empty
+                    episode_name = episode_name.replace(":", " -")
 
             new_name = f"{series_name} - S{season_num:02d}E{episode_num:02d}"
             if episode_name:

@@ -46,6 +46,9 @@ class Cache:
                 timestamp = datetime.fromisoformat(value['timestamp'])
                 if datetime.now() - timestamp <= timedelta(days=self.ttl_days):
                     return value['data']
+                # Entry is expired, return None to trigger refresh
+                return None
+            # Old format without timestamp, return as-is for backward compatibility
             return value
         return None
 

@@ -24,6 +24,8 @@ class FileMonitor(FileSystemEventHandler):
         self.retry_interval = retry_interval
         self.stability_period = stability_period
         self.pending_files: Dict[str, datetime] = {}
+        self.pending_retry_count: Dict[str, int] = {}  # Track retry attempts
+        self.max_retries = 3  # Maximum number of retry attempts
         self.changed_files: Dict[str, datetime] = {}
         self.last_change_time: Optional[datetime] = None
         self.processing_lock = threading.Lock()
@@ -118,7 +120,7 @@ class FileMonitor(FileSystemEventHandler):
         with self.processing_lock:
             self.changed_files[str(file_path)] = datetime.now()
             self.last_change_time = datetime.now()
-    
+    @@
     def _file_processor_loop(self):
         """Background thread that processes files after a period of stability."""
         # Flag to track if we've done an initial processing
@@ -245,10 +247,25 @@ class FileMonitor(FileSystemEventHandler):
                 if reason:
                     msg += f". Reason: {reason}"
                 logger.warning(msg)
-                self.pending_files[str(file_path)] = datetime.now()
+                
+                # Check retry count before adding to pending
+                file_str = str(file_path)
+                retry_count = self.pending_retry_count.get(file_str, 0)
+                if retry_count < self.max_retries:
+                    self.pending_files[file_str] = datetime.now()
+                    self.pending_retry_count[file_str] = retry_count + 1
+                    logger.info(f"Added to pending retry queue (attempt {retry_count + 1}/{self.max_retries}): {file_path}")
+                else:
+                    logger.warning(f"Max retries ({self.max_retries}) reached for {file_path}. Giving up.")
+                    # Clean up retry count
+                    self.pending_retry_count.pop(file_str, None)
         except Exception as e:
             logger.error(f"Error processing {file_path}: {e}")
-            self.pending_files[str(file_path)] = datetime.now()
+            file_str = str(file_path)
+            retry_count = self.pending_retry_count.get(file_str, 0)
+            if retry_count < self.max_retries:
+                self.pending_files[file_str] = datetime.now()
+                self.pending_retry_count[file_str] = retry_count + 1
 
     def retry_pending_files(self):
         """Retry processing of pending files."""
@@ -263,6 +280,8 @@ class FileMonitor(FileSystemEventHandler):
                 # File no longer exists (likely moved successfully), remove from pending
                 files_to_remove.append(file_path)
                 logger.info(f"Removing non-existent file from pending list: {file_path}")
+                # Also clean up retry count
+                self.pending_retry_count.pop(file_path, None)
             elif now - last_attempt >= timedelta(seconds=self.retry_interval):
                 # File exists and is due for retry
                 retry_files.append(file_path)
