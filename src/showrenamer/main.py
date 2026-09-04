@@ -12,6 +12,7 @@ from showrenamer.config import Config
 from showrenamer.renamer import FileRenamer
 from showrenamer.file_monitor import FileMonitor
 from showrenamer.config_watcher import ConfigWatcher
+from showrenamer.show_directory import ShowDirectoryWatcher
 
 # Set up logging
 logging.basicConfig(
@@ -78,7 +79,15 @@ class ShowRenamerApp:
             retry_interval=retry_interval,
             stability_period=stability_period
         )
-        
+
+        # Watch the configured show directories for newly created folders.
+        # When the user creates a show folder manually, any renamed-but-not-moved
+        # files are retried immediately instead of waiting for the next interval.
+        self.show_dir_watcher = ShowDirectoryWatcher(
+            show_directories,
+            self.monitor.force_retry_pending_files
+        )
+
         # Set up config watcher - exclude cache file from being watched
         config_files_to_watch = {k: v for k, v in self.config.config_files.items() if k != 'cache'}
         self.config_watcher = ConfigWatcher(
@@ -94,14 +103,15 @@ class ShowRenamerApp:
 
     def _on_directories_changed(self, directories: Dict):
         """Handle changes to the show directories configuration.
-        
+
         Args:
             directories: Updated directories configuration
         """
         logger.info("Show directories configuration changed")
         show_directories = directories.get("show_directories", [])
         self.renamer.update_show_directories(show_directories)
-        
+        self.show_dir_watcher.update_directories(show_directories)
+
     def _on_patterns_changed(self, patterns: Dict):
         """Handle changes to the name patterns configuration.
         
@@ -131,7 +141,10 @@ class ShowRenamerApp:
             
             # Start the file monitor
             self.monitor.start()
-            
+
+            # Start watching show directories for newly created folders
+            self.show_dir_watcher.start()
+
             # Start the config watcher
             self.config_watcher.start()
             logger.info("Configuration hot-reloading enabled")
@@ -145,8 +158,9 @@ class ShowRenamerApp:
                 time.sleep(60)
                 
         except KeyboardInterrupt:
-            logger.info("\nStopping file monitor and config watcher...")
+            logger.info("\nStopping file monitor, show directory watcher and config watcher...")
             self.monitor.stop()
+            self.show_dir_watcher.stop()
             self.config_watcher.stop()
 
 def main():

@@ -1,8 +1,10 @@
 """Show directory management module."""
 from pathlib import Path
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Callable
 import logging
 import re
+from watchdog.observers import Observer
+from watchdog.events import FileSystemEventHandler
 
 logger = logging.getLogger(__name__)
 
@@ -241,3 +243,58 @@ class ShowDirectory:
         except Exception as e:
             logger.error(f"Error moving file {source_file} to {dest_file}: {e}")
             return False
+
+
+class ShowDirectoryWatcher(FileSystemEventHandler):
+    """Watch show directories for newly created folders and trigger a callback."""
+
+    def __init__(self, show_directories: List[str], on_directory_created: Callable[[], None]):
+        """
+        Initialize the show directory watcher.
+
+        Args:
+            show_directories: List of base directories containing show folders
+            on_directory_created: Callback to invoke when a new directory is created
+        """
+        self.show_directories = [Path(d) for d in show_directories if d]
+        self.on_directory_created = on_directory_created
+        self.observer = Observer()
+        self._started = False
+
+    def start(self):
+        """Start watching show directories for new folders."""
+        for d in self.show_directories:
+            if d.exists() and d.is_dir():
+                try:
+                    self.observer.schedule(self, str(d), recursive=False)
+                    logger.info(f"Watching show directory for new folders: {d}")
+                except Exception as e:
+                    logger.warning(f"Could not watch show directory {d}: {e}")
+        self.observer.start()
+        self._started = True
+
+    def on_created(self, event):
+        """Handle new directory creation events."""
+        if event.is_directory:
+            logger.info(f"New directory created in show library: {event.src_path}")
+            self.on_directory_created()
+
+    def update_directories(self, show_directories: List[str]):
+        """Update the watched directories (e.g., after configuration change)."""
+        if not self._started:
+            self.show_directories = [Path(d) for d in show_directories if d]
+            return
+
+        self.observer.stop()
+        self.observer.join()
+        self.observer = Observer()
+        self.show_directories = [Path(d) for d in show_directories if d]
+        self.start()
+
+    def stop(self):
+        """Stop watching show directories."""
+        if self._started:
+            self.observer.stop()
+            self.observer.join()
+            self._started = False
+            logger.info("Stopped watching show directories")

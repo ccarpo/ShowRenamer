@@ -10,6 +10,8 @@ from showrenamer.file_logger import FileLogger
 
 logger = logging.getLogger(__name__)
 
+NO_TARGET_DIR_REASON = "No suitable target directory found for move operation"
+
 class FileRenamer:
     def __init__(self, 
                  api_client,
@@ -202,7 +204,7 @@ class FileRenamer:
                     }
                 )
                 # Return False to indicate failure and trigger retry
-                return False, "No suitable target directory found for move operation"
+                return False, NO_TARGET_DIR_REASON
         
         # If we only needed to rename or if we're in dry run mode, return success
         return True, None
@@ -247,8 +249,10 @@ class FileRenamer:
         
         # Remove strings from the strings_to_remove list with case-insensitive matching
         for string_to_remove in strings_to_remove:
-            # Use regex with case-insensitive flag to replace the string
-            name = re.sub(re.escape(string_to_remove), "", name, flags=re.IGNORECASE)
+            # Use word boundaries to avoid removing substrings from within words
+            # (e.g. "ver" should not strip letters from "average" or "universe")
+            pattern = r'\b' + re.escape(string_to_remove) + r'\b'
+            name = re.sub(pattern, "", name, flags=re.IGNORECASE)
     
         # Apply replacements
         if self.config.patterns["replacements"]["dots_to_spaces"]:

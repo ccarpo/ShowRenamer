@@ -9,6 +9,8 @@ import re
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
+from showrenamer.renamer import NO_TARGET_DIR_REASON
+
 logger = logging.getLogger(__name__)
 
 class FileMonitor(FileSystemEventHandler):
@@ -120,7 +122,7 @@ class FileMonitor(FileSystemEventHandler):
         with self.processing_lock:
             self.changed_files[str(file_path)] = datetime.now()
             self.last_change_time = datetime.now()
-    @@
+
     def _file_processor_loop(self):
         """Background thread that processes files after a period of stability."""
         # Flag to track if we've done an initial processing
@@ -247,18 +249,25 @@ class FileMonitor(FileSystemEventHandler):
                 if reason:
                     msg += f". Reason: {reason}"
                 logger.warning(msg)
-                
-                # Check retry count before adding to pending
+
                 file_str = str(file_path)
-                retry_count = self.pending_retry_count.get(file_str, 0)
-                if retry_count < self.max_retries:
+                # Missing target directory is a transient failure: the user may
+                # create the show folder later. Keep retrying indefinitely without
+                # consuming the normal retry budget.
+                if reason == NO_TARGET_DIR_REASON:
                     self.pending_files[file_str] = datetime.now()
-                    self.pending_retry_count[file_str] = retry_count + 1
-                    logger.info(f"Added to pending retry queue (attempt {retry_count + 1}/{self.max_retries}): {file_path}")
+                    logger.info(f"Added to pending retry queue (move target not ready): {file_path}")
                 else:
-                    logger.warning(f"Max retries ({self.max_retries}) reached for {file_path}. Giving up.")
-                    # Clean up retry count
-                    self.pending_retry_count.pop(file_str, None)
+                    # Check retry count before adding to pending
+                    retry_count = self.pending_retry_count.get(file_str, 0)
+                    if retry_count < self.max_retries:
+                        self.pending_files[file_str] = datetime.now()
+                        self.pending_retry_count[file_str] = retry_count + 1
+                        logger.info(f"Added to pending retry queue (attempt {retry_count + 1}/{self.max_retries}): {file_path}")
+                    else:
+                        logger.warning(f"Max retries ({self.max_retries}) reached for {file_path}. Giving up.")
+                        # Clean up retry count
+                        self.pending_retry_count.pop(file_str, None)
         except Exception as e:
             logger.error(f"Error processing {file_path}: {e}")
             file_str = str(file_path)
@@ -272,7 +281,7 @@ class FileMonitor(FileSystemEventHandler):
         now = datetime.now()
         retry_files = []
         files_to_remove = []
-        
+
         # First, check all pending files and remove those that no longer exist
         for file_path, last_attempt in list(self.pending_files.items()):
             path_obj = Path(file_path)
@@ -285,14 +294,14 @@ class FileMonitor(FileSystemEventHandler):
             elif now - last_attempt >= timedelta(seconds=self.retry_interval):
                 # File exists and is due for retry
                 retry_files.append(file_path)
-        
+
         # Remove non-existent files from pending list
         for file_path in files_to_remove:
             del self.pending_files[file_path]
-        
+
         if retry_files:
             logger.info(f"Retrying {len(retry_files)} pending files")
-            
+
         for file_path in retry_files:
             try:
                 # Double-check file still exists before processing
@@ -300,7 +309,7 @@ class FileMonitor(FileSystemEventHandler):
                     logger.info(f"File no longer exists, removing from pending: {file_path}")
                     del self.pending_files[file_path]
                     continue
-                    
+
                 success = self.file_handler(file_path)
                 if success:
                     del self.pending_files[file_path]
@@ -309,3 +318,45 @@ class FileMonitor(FileSystemEventHandler):
             except Exception as e:
                 logger.error(f"Error retrying {file_path}: {e}")
                 self.pending_files[file_path] = now
+
+    def force_retry_pending_files(self):
+        """Immediately retry all pending files, ignoring the retry interval."""
+        now = datetime.now()
+        retry_files = []
+        files_to_remove = []
+
+        with self.processing_lock:
+            for file_path, last_attempt in list(self.pending_files.items()):
+                path_obj = Path(file_path)
+                if not path_obj.exists():
+                    files_to_remove.append(file_path)
+                    logger.info(f"Removing non-existent file from pending list: {file_path}")
+                    self.pending_retry_count.pop(file_path, None)
+                else:
+                    retry_files.append(file_path)
+
+            for file_path in files_to_remove:
+                self.pending_files.pop(file_path, None)
+
+        if retry_files:
+            logger.info(f"Force retrying {len(retry_files)} pending files")
+
+        for file_path in retry_files:
+            try:
+                if not Path(file_path).exists():
+                    with self.processing_lock:
+                        self.pending_files.pop(file_path, None)
+                        self.pending_retry_count.pop(file_path, None)
+                    continue
+
+                success = self.file_handler(file_path)
+                with self.processing_lock:
+                    if success:
+                        self.pending_files.pop(file_path, None)
+                        self.pending_retry_count.pop(file_path, None)
+                    else:
+                        self.pending_files[file_path] = now
+            except Exception as e:
+                logger.error(f"Error force retrying {file_path}: {e}")
+                with self.processing_lock:
+                    self.pending_files[file_path] = now
