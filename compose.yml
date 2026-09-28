@@ -10,10 +10,12 @@ services:
       
       # Behavior settings
       #- SHOWRENAMER_INTERACTIVE=${SHOWRENAMER_INTERACTIVE:-false}        # Enable interactive confirmations
-      
+
       # Timing settings
       #- SHOWRENAMER_RETRY_INTERVAL=86400      # Retry failed files after 24 hours
       #- SHOWRENAMER_STABILITY_PERIOD=300      # Wait 5 minutes before processing new files
+      #- SHOWRENAMER_FULL_RESCAN_INTERVAL=1800 # Full re-scan every 30 minutes
+      #- SHOWRENAMER_NO_TARGET_DIR_RETRY_INTERVAL=60 # Retry missing target dirs every minute
     volumes:
       # Config persistence
       - ./config:/config

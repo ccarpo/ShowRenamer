@@ -259,19 +259,36 @@ class ShowDirectoryWatcher(FileSystemEventHandler):
         self.show_directories = [Path(d) for d in show_directories if d]
         self.on_directory_created = on_directory_created
         self.observer = Observer()
+        self._watches: Dict[Path, object] = {}
         self._started = False
 
     def start(self):
         """Start watching show directories for new folders."""
         for d in self.show_directories:
-            if d.exists() and d.is_dir():
-                try:
-                    self.observer.schedule(self, str(d), recursive=False)
-                    logger.info(f"Watching show directory for new folders: {d}")
-                except Exception as e:
-                    logger.warning(f"Could not watch show directory {d}: {e}")
+            self._add_watch(d)
         self.observer.start()
         self._started = True
+
+    def _add_watch(self, directory: Path):
+        """Add a watch for a single show directory if it exists and is not already watched."""
+        if directory in self._watches:
+            return
+        if directory.exists() and directory.is_dir():
+            try:
+                watch = self.observer.schedule(self, str(directory), recursive=False)
+                self._watches[directory] = watch
+                logger.info(f"Watching show directory for new folders: {directory}")
+            except Exception as e:
+                logger.warning(f"Could not watch show directory {directory}: {e}")
+
+    def _remove_watch(self, directory: Path):
+        """Remove the watch for a single show directory."""
+        watch = self._watches.pop(directory, None)
+        if watch and self._started:
+            try:
+                self.observer.unschedule(watch)
+            except Exception as e:
+                logger.warning(f"Could not unschedule show directory {directory}: {e}")
 
     def on_created(self, event):
         """Handle new directory creation events."""
@@ -281,15 +298,26 @@ class ShowDirectoryWatcher(FileSystemEventHandler):
 
     def update_directories(self, show_directories: List[str]):
         """Update the watched directories (e.g., after configuration change)."""
+        new_directories = [Path(d) for d in show_directories if d]
+        old_directories = set(self.show_directories)
+        added = [d for d in new_directories if d not in old_directories]
+        removed = [d for d in self.show_directories if d not in new_directories]
+
+        self.show_directories = new_directories
+
         if not self._started:
-            self.show_directories = [Path(d) for d in show_directories if d]
             return
 
-        self.observer.stop()
-        self.observer.join()
-        self.observer = Observer()
-        self.show_directories = [Path(d) for d in show_directories if d]
-        self.start()
+        for d in removed:
+            self._remove_watch(d)
+
+        for d in added:
+            self._add_watch(d)
+
+        # A directory that already existed may have been removed from disk and
+        # recreated, or the user may have changed config. In either case, trigger
+        # a retry so any pending moves can be attempted against the new layout.
+        self.on_directory_created()
 
     def stop(self):
         """Stop watching show directories."""
@@ -297,4 +325,5 @@ class ShowDirectoryWatcher(FileSystemEventHandler):
             self.observer.stop()
             self.observer.join()
             self._started = False
+            self._watches.clear()
             logger.info("Stopped watching show directories")

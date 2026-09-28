@@ -104,6 +104,8 @@ Additional modes:
 ### Timing Settings
 - `SHOWRENAMER_RETRY_INTERVAL`: How long to wait before retrying failed files (default: 86400 seconds / 24 hours)
 - `SHOWRENAMER_STABILITY_PERIOD`: How long to wait before processing new files (default: 300 seconds / 5 minutes)
+- `SHOWRENAMER_FULL_RESCAN_INTERVAL`: How often to perform a full re-scan of monitored directories to catch missed events (default: 1800 seconds / 30 minutes)
+- `SHOWRENAMER_NO_TARGET_DIR_RETRY_INTERVAL`: How long to wait before retrying files that could not be moved because the target show/season directory does not yet exist (default: 60 seconds / 1 minute)
 
 ## File Logging
 

@@ -170,7 +170,9 @@ class FileRenamer:
         # Then try to move to show directory if needed
         if should_move and not self.dry_run:
             target_dir = self.show_directory.get_target_directory(show_name, episode_info["seasonNumber"])
-            moved = self.show_directory.move_file(
+            # Short-circuit when no target dir exists so move_file doesn't
+            # repeat the lookup it would do for season_dir=None.
+            moved = target_dir is not None and self.show_directory.move_file(
                 new_path,
                 show_name,
                 episode_info["seasonNumber"],

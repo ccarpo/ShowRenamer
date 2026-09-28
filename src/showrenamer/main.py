@@ -31,7 +31,9 @@ class ShowRenamerApp:
                  dry_run: bool = False,
                  rename_only: bool = False,
                  retry_interval: int = 86400,  # 24 hours in seconds
-                 stability_period: int = 300,  # 3 minutes in seconds
+                 stability_period: int = 300,  # 5 minutes in seconds
+                 full_rescan_interval: int = 1800,  # 30 minutes in seconds
+                 no_target_dir_retry_interval: int = 60,  # 1 minute in seconds
                  shows_dirs: List[str] = None):
         self.config = Config(config_dir)
         self.cache = Cache(
@@ -71,13 +73,17 @@ class ShowRenamerApp:
         # Get timing parameters from environment or use defaults
         retry_interval = int(os.getenv('SHOWRENAMER_RETRY_INTERVAL', str(retry_interval)))
         stability_period = int(os.getenv('SHOWRENAMER_STABILITY_PERIOD', str(stability_period)))
+        full_rescan_interval = int(os.getenv('SHOWRENAMER_FULL_RESCAN_INTERVAL', str(full_rescan_interval)))
+        no_target_dir_retry_interval = int(os.getenv('SHOWRENAMER_NO_TARGET_DIR_RETRY_INTERVAL', str(no_target_dir_retry_interval)))
 
         self.monitor = FileMonitor(
             watch_paths,
             self.renamer.process_file,
             self.renamer.video_extensions,
             retry_interval=retry_interval,
-            stability_period=stability_period
+            stability_period=stability_period,
+            full_rescan_interval=full_rescan_interval,
+            no_target_dir_retry_interval=no_target_dir_retry_interval
         )
 
         # Watch the configured show directories for newly created folders.
@@ -111,22 +117,31 @@ class ShowRenamerApp:
         show_directories = directories.get("show_directories", [])
         self.renamer.update_show_directories(show_directories)
         self.show_dir_watcher.update_directories(show_directories)
+        # A new/changed target directory may allow previously failed moves to
+        # succeed, so re-scan and reset retry backoffs immediately.
+        self.monitor.force_retry_pending_files()
 
     def _on_patterns_changed(self, patterns: Dict):
         """Handle changes to the name patterns configuration.
-        
+
         Args:
             patterns: Updated patterns configuration
         """
         self.renamer.update_patterns(patterns)
-        
+        # Files that previously could not be parsed may now match the new
+        # patterns, so re-scan existing files and reset retry backoffs.
+        self.monitor.force_retry_pending_files()
+
     def _on_mapping_changed(self, mapping: Dict):
         """Handle changes to the series mapping configuration.
-        
+
         Args:
             mapping: Updated mapping configuration
         """
         self.renamer.update_mapping(mapping)
+        # A new mapping may fix previously unmatched series, so re-scan existing
+        # files and reset retry backoffs immediately.
+        self.monitor.force_retry_pending_files()
     
     def run(self):
         """Run the application."""
@@ -137,8 +152,8 @@ class ShowRenamerApp:
             
             logger.info("Starting file monitor...")
             logger.info(f"Show directories: {self.config.directories['show_directories']}")
-            logger.info(f"File processing will begin after {self.monitor.stability_period} seconds of stability")
-            
+            logger.info(f"File processing will begin after files are stable for {self.monitor.scheduler.stability_period} seconds")
+
             # Start the file monitor
             self.monitor.start()
 
@@ -227,8 +242,10 @@ def main():
         cache_ttl_days=args.cache_ttl,
         dry_run=dry_run,
         rename_only=rename_only,
-        retry_interval=int(os.getenv('SHOWRENAMER_RETRY_INTERVAL', '86400')),  # 4 hours
+        retry_interval=int(os.getenv('SHOWRENAMER_RETRY_INTERVAL', '86400')),  # 24 hours
         stability_period=int(os.getenv('SHOWRENAMER_STABILITY_PERIOD', '300')),  # 5 minutes
+        full_rescan_interval=int(os.getenv('SHOWRENAMER_FULL_RESCAN_INTERVAL', '1800')),  # 30 minutes
+        no_target_dir_retry_interval=int(os.getenv('SHOWRENAMER_NO_TARGET_DIR_RETRY_INTERVAL', '60')),  # 1 minute
         shows_dirs=args.shows_dir
     )
     

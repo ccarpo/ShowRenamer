@@ -1,0 +1,391 @@
+[
+  {
+    "timestamp": "2025-05-14T13:08:48.207439",
+    "operation": "rename",
+    "source_file": "/media/incoming/4sf-drwho2023-sd-s02e04.mkv",
+    "target_file": "/media/incoming/Doctor Who (2023) - S02E04 - Gl\u00fcckstag.mkv",
+    "success": true,
+    "details": {
+      "show_name": "Doctor Who (2023)",
+      "season": 2,
+      "episode": 4,
+      "episode_title": "Gl\u00fcckstag"
+    }
+  },
+  {
+    "timestamp": "2025-05-14T13:08:48.208445",
+    "operation": "move",
+    "source_file": "/media/incoming/Doctor Who (2023) - S02E04 - Gl\u00fcckstag.mkv",
+    "target_file": null,
+    "success": false,
+    "details": {
+      "show_name": "Doctor Who (2023)",
+      "season": 2,
+      "reason": "No suitable target directory found"
+    }
+  },
+  {
+    "timestamp": "2025-05-14T13:08:48.209603",
+    "operation": "rename",
+    "source_file": "/media/incoming/4sf-drwho2023-sd-s02e05.mkv",
+    "target_file": "/media/incoming/Doctor Who (2023) - S02E05 - Die Geschichtenmaschine.mkv",
+    "success": true,
+    "details": {
+      "show_name": "Doctor Who (2023)",
+      "season": 2,
+      "episode": 5,
+      "episode_title": "Die Geschichtenmaschine"
+    }
+  },
+  {
+    "timestamp": "2025-05-14T13:08:48.210432",
+    "operation": "move",
+    "source_file": "/media/incoming/Doctor Who (2023) - S02E05 - Die Geschichtenmaschine.mkv",
+    "target_file": null,
+    "success": false,
+    "details": {
+      "show_name": "Doctor Who (2023)",
+      "season": 2,
+      "reason": "No suitable target directory found"
+    }
+  },
+  {
+    "timestamp": "2025-05-14T13:08:48.690903",
+    "operation": "rename",
+    "source_file": "/media/incoming/4sf-tht-sd-s06e08.mkv",
+    "target_file": "/media/incoming/The Handmaid's Tale - Der Report der Magd - S06E08 - Exodus.mkv",
+    "success": true,
+    "details": {
+      "show_name": "The Handmaid's Tale - Der Report der Magd",
+      "season": 6,
+      "episode": 8,
+      "episode_title": "Exodus"
+    }
+  },
+  {
+    "timestamp": "2025-05-14T13:08:48.692324",
+    "operation": "move",
+    "source_file": "/media/incoming/The Handmaid's Tale - Der Report der Magd - S06E08 - Exodus.mkv",
+    "target_file": null,
+    "success": false,
+    "details": {
+      "show_name": "The Handmaid's Tale - Der Report der Magd",
+      "season": 6,
+      "reason": "No suitable target directory found"
+    }
+  },
+  {
+    "timestamp": "2025-05-14T13:08:49.231087",
+    "operation": "rename",
+    "source_file": "/media/incoming/4sf-tlou-sd-s02e05.mkv",
+    "target_file": "/media/incoming/The Last of Us - S02E05 - Sp\u00fcr ihre Liebe.mkv",
+    "success": true,
+    "details": {
+      "show_name": "The Last of Us",
+      "season": 2,
+      "episode": 5,
+      "episode_title": "Sp\u00fcr ihre Liebe"
+    }
+  },
+  {
+    "timestamp": "2025-05-14T13:08:49.234163",
+    "operation": "move",
+    "source_file": "/media/incoming/The Last of Us - S02E05 - Sp\u00fcr ihre Liebe.mkv",
+    "target_file": null,
+    "success": false,
+    "details": {
+      "show_name": "The Last of Us",
+      "season": 2,
+      "reason": "No suitable target directory found"
+    }
+  },
+  {
+    "timestamp": "2025-05-14T13:08:49.761030",
+    "operation": "rename",
+    "source_file": "/media/incoming/The.Walking.Dead.Dead.City.S02E01.Power.Equals.Power.German.DL.WEB.x264-4SF.mkv",
+    "target_file": "/media/incoming/The Walking Dead: Dead City - S02E01 - Energie ist Macht.mkv",
+    "success": true,
+    "details": {
+      "show_name": "The Walking Dead: Dead City",
+      "season": 2,
+      "episode": 1,
+      "episode_title": "Energie ist Macht"
+    }
+  },
+  {
+    "timestamp": "2025-05-14T13:08:49.763195",
+    "operation": "move",
+    "source_file": "/media/incoming/The Walking Dead: Dead City - S02E01 - Energie ist Macht.mkv",
+    "target_file": null,
+    "success": false,
+    "details": {
+      "show_name": "The Walking Dead: Dead City",
+      "season": 2,
+      "reason": "No suitable target directory found"
+    }
+  },
+  {
+    "timestamp": "2025-05-14T13:08:49.765295",
+    "operation": "rename",
+    "source_file": "/media/incoming/The.Walking.Dead.Dead.City.S02E02.Noch.eine.miese.Lektion.German.DL.WEB.x264-4SF.mkv",
+    "target_file": "/media/incoming/The Walking Dead: Dead City - S02E02 - Noch eine miese Lektion.mkv",
+    "success": true,
+    "details": {
+      "show_name": "The Walking Dead: Dead City",
+      "season": 2,
+      "episode": 2,
+      "episode_title": "Noch eine miese Lektion"
+    }
+  },
+  {
+    "timestamp": "2025-05-14T13:08:49.767332",
+    "operation": "move",
+    "source_file": "/media/incoming/The Walking Dead: Dead City - S02E02 - Noch eine miese Lektion.mkv",
+    "target_file": null,
+    "success": false,
+    "details": {
+      "show_name": "The Walking Dead: Dead City",
+      "season": 2,
+      "reason": "No suitable target directory found"
+    }
+  },
+  {
+    "timestamp": "2025-05-14T13:13:48.655955",
+    "operation": "rename",
+    "source_file": "/media/incoming/Doctor Who (2023) - S02E04 - Gl\u00fcckstag.mkv",
+    "target_file": "/media/incoming/Doctor Who (2023) - S02E04 - Gl\u00fcckstag.mkv",
+    "success": true,
+    "details": {
+      "show_name": "Doctor Who (2023)",
+      "season": 2,
+      "episode": 4,
+      "episode_title": "Gl\u00fcckstag"
+    }
+  },
+  {
+    "timestamp": "2025-05-14T13:13:48.657478",
+    "operation": "move",
+    "source_file": "/media/incoming/Doctor Who (2023) - S02E04 - Gl\u00fcckstag.mkv",
+    "target_file": null,
+    "success": false,
+    "details": {
+      "show_name": "Doctor Who (2023)",
+      "season": 2,
+      "reason": "No suitable target directory found"
+    }
+  },
+  {
+    "timestamp": "2025-05-14T13:13:48.660926",
+    "operation": "rename",
+    "source_file": "/media/incoming/Doctor Who (2023) - S02E05 - Die Geschichtenmaschine.mkv",
+    "target_file": "/media/incoming/Doctor Who (2023) - S02E05 - Die Geschichtenmaschine.mkv",
+    "success": true,
+    "details": {
+      "show_name": "Doctor Who (2023)",
+      "season": 2,
+      "episode": 5,
+      "episode_title": "Die Geschichtenmaschine"
+    }
+  },
+  {
+    "timestamp": "2025-05-14T13:13:48.662705",
+    "operation": "move",
+    "source_file": "/media/incoming/Doctor Who (2023) - S02E05 - Die Geschichtenmaschine.mkv",
+    "target_file": null,
+    "success": false,
+    "details": {
+      "show_name": "Doctor Who (2023)",
+      "season": 2,
+      "reason": "No suitable target directory found"
+    }
+  },
+  {
+    "timestamp": "2025-05-14T13:13:49.067376",
+    "operation": "rename",
+    "source_file": "/media/incoming/The Handmaid's Tale - Der Report der Magd - S06E08 - Exodus.mkv",
+    "target_file": "/media/incoming/The Handmaid's Tale - Der Report der Magd - S06E08 - Exodus.mkv",
+    "success": true,
+    "details": {
+      "show_name": "The Handmaid's Tale - Der Report der Magd",
+      "season": 6,
+      "episode": 8,
+      "episode_title": "Exodus"
+    }
+  },
+  {
+    "timestamp": "2025-05-14T13:13:49.068311",
+    "operation": "move",
+    "source_file": "/media/incoming/The Handmaid's Tale - Der Report der Magd - S06E08 - Exodus.mkv",
+    "target_file": null,
+    "success": false,
+    "details": {
+      "show_name": "The Handmaid's Tale - Der Report der Magd",
+      "season": 6,
+      "reason": "No suitable target directory found"
+    }
+  },
+  {
+    "timestamp": "2025-05-14T13:13:49.324998",
+    "operation": "rename",
+    "source_file": "/media/incoming/The Last of Us - S02E05 - Sp\u00fcr ihre Liebe.mkv",
+    "target_file": "/media/incoming/The Last of Us - S02E05 - Sp\u00fcr ihre Liebe.mkv",
+    "success": true,
+    "details": {
+      "show_name": "The Last of Us",
+      "season": 2,
+      "episode": 5,
+      "episode_title": "Sp\u00fcr ihre Liebe"
+    }
+  },
+  {
+    "timestamp": "2025-05-14T13:13:49.326693",
+    "operation": "move",
+    "source_file": "/media/incoming/The Last of Us - S02E05 - Sp\u00fcr ihre Liebe.mkv",
+    "target_file": null,
+    "success": false,
+    "details": {
+      "show_name": "The Last of Us",
+      "season": 2,
+      "reason": "No suitable target directory found"
+    }
+  },
+  {
+    "timestamp": "2025-05-14T13:13:49.757581",
+    "operation": "rename",
+    "source_file": "/media/incoming/The Walking Dead: Dead City - S02E01 - Energie ist Macht.mkv",
+    "target_file": "/media/incoming/The Walking Dead: Dead City - S02E01 - Energie ist Macht.mkv",
+    "success": true,
+    "details": {
+      "show_name": "The Walking Dead: Dead City",
+      "season": 2,
+      "episode": 1,
+      "episode_title": "Energie ist Macht"
+    }
+  },
+  {
+    "timestamp": "2025-05-14T13:13:49.759363",
+    "operation": "move",
+    "source_file": "/media/incoming/The Walking Dead: Dead City - S02E01 - Energie ist Macht.mkv",
+    "target_file": null,
+    "success": false,
+    "details": {
+      "show_name": "The Walking Dead: Dead City",
+      "season": 2,
+      "reason": "No suitable target directory found"
+    }
+  },
+  {
+    "timestamp": "2025-05-14T13:13:49.763163",
+    "operation": "rename",
+    "source_file": "/media/incoming/The Walking Dead: Dead City - S02E02 - Noch eine miese Lektion.mkv",
+    "target_file": "/media/incoming/The Walking Dead: Dead City - S02E02 - Noch eine miese Lektion.mkv",
+    "success": true,
+    "details": {
+      "show_name": "The Walking Dead: Dead City",
+      "season": 2,
+      "episode": 2,
+      "episode_title": "Noch eine miese Lektion"
+    }
+  },
+  {
+    "timestamp": "2025-05-14T13:13:49.764961",
+    "operation": "move",
+    "source_file": "/media/incoming/The Walking Dead: Dead City - S02E02 - Noch eine miese Lektion.mkv",
+    "target_file": null,
+    "success": false,
+    "details": {
+      "show_name": "The Walking Dead: Dead City",
+      "season": 2,
+      "reason": "No suitable target directory found"
+    }
+  },
+  {
+    "timestamp": "2025-05-14T22:07:28.588412",
+    "operation": "rename",
+    "source_file": "/media/truecrypt4/tmp/extracted/The Walking Dead: Dead City - S02E01 - Energie ist Macht.mkv",
+    "target_file": "/media/truecrypt4/tmp/extracted/The Walking Dead: Dead City - S02E01 - Energie ist Macht.mkv",
+    "success": true,
+    "details": {
+      "show_name": "The Walking Dead: Dead City",
+      "season": 2,
+      "episode": 1,
+      "episode_title": "Energie ist Macht"
+    }
+  },
+  {
+    "timestamp": "2025-05-14T22:08:03.980464",
+    "operation": "move",
+    "source_file": "/media/truecrypt4/tmp/extracted/The Walking Dead: Dead City - S02E01 - Energie ist Macht.mkv",
+    "target_file": "/media/qinakuta/Serien/00 - Aktuell/The Walking Dead - Dead City/Season 2/The Walking Dead: Dead City - S02E01 - Energie ist Macht.mkv",
+    "success": true,
+    "details": {
+      "show_name": "The Walking Dead: Dead City",
+      "season": 2,
+      "episode": 1
+    }
+  },
+  {
+    "timestamp": "2025-05-14T22:08:07.193586",
+    "operation": "rename",
+    "source_file": "/media/truecrypt4/tmp/extracted/The Walking Dead: Dead City - S02E02 - Noch eine miese Lektion.mkv",
+    "target_file": "/media/truecrypt4/tmp/extracted/The Walking Dead: Dead City - S02E02 - Noch eine miese Lektion.mkv",
+    "success": true,
+    "details": {
+      "show_name": "The Walking Dead: Dead City",
+      "season": 2,
+      "episode": 2,
+      "episode_title": "Noch eine miese Lektion"
+    }
+  },
+  {
+    "timestamp": "2025-05-14T22:08:16.162866",
+    "operation": "move",
+    "source_file": "/media/truecrypt4/tmp/extracted/The Walking Dead: Dead City - S02E02 - Noch eine miese Lektion.mkv",
+    "target_file": "/media/qinakuta/Serien/00 - Aktuell/The Walking Dead - Dead City/Season 2/The Walking Dead: Dead City - S02E02 - Noch eine miese Lektion.mkv",
+    "success": true,
+    "details": {
+      "show_name": "The Walking Dead: Dead City",
+      "season": 2,
+      "episode": 2
+    }
+  },
+  {
+    "timestamp": "2025-06-24T11:10:49.310832",
+    "operation": "rename",
+    "source_file": "/media/truecrypt4/tmp/extracted/Die Simpsons - S36E08.mkv",
+    "target_file": "/media/truecrypt4/tmp/extracted/Die Simpsons - S36E08.mkv",
+    "success": true,
+    "details": {
+      "show_name": "Die Simpsons",
+      "season": 36,
+      "episode": 8,
+      "episode_title": null
+    }
+  },
+  {
+    "timestamp": "2025-06-24T11:17:57.366871",
+    "operation": "rename",
+    "source_file": "/media/truecrypt4/tmp/extracted/Die Simpsons - S36E08.mkv",
+    "target_file": "/media/truecrypt4/tmp/extracted/Die Simpsons - S36E08.mkv",
+    "success": true,
+    "details": {
+      "show_name": "Die Simpsons",
+      "season": 36,
+      "episode": 8,
+      "episode_title": null
+    }
+  },
+  {
+    "timestamp": "2025-06-24T11:19:07.809098",
+    "operation": "rename",
+    "source_file": "/media/truecrypt4/tmp/extracted/Die Simpsons - S36E08.mkv",
+    "target_file": "/media/truecrypt4/tmp/extracted/Die Simpsons - S36E08.mkv",
+    "success": true,
+    "details": {
+      "show_name": "Die Simpsons",
+      "season": 36,
+      "episode": 8,
+      "episode_title": null
+    }
+  }
+]
